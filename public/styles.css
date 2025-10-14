@@ -70,3 +70,26 @@ figure img{max-width:100%; border:1px solid var(--line); border-radius:10px}
 .badge{font-size:.75rem; padding:3px 8px; border:1px solid var(--line); border-radius:999px; color:var(--muted); background:#fafafa}
 .kv{display:flex; gap:6px; flex-wrap:wrap}
 .kv span{background:#f3f3f5; border:1px solid var(--line); padding:6px 10px; border-radius:10px; font-size:.85rem}
+.hero{
+  display: grid;
+  grid-template-columns: 1fr 260px; /* left grows, right fixed */
+  gap: 32px;
+  align-items: start;
+}
+
+.hero-photo{ justify-self: end; }
+.hero-photo img{
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  border: 1px solid #e5e5ea; /* subtle ring */
+}
+
+/* Mobile: stack inline (photo under text) */
+@media (max-width: 900px){
+  .hero{ grid-template-columns: 1fr; }
+  .hero-photo{ justify-self: start; margin-top: 16px; }
+  .hero-photo img{ width: 160px; height: 160px; } /* optional smaller avatar */
+}
