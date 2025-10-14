@@ -116,9 +116,60 @@ footer.site {
   background: #fff;
 }
 
-/* ===== Responsive ===== */
-@media (max-width: 900px){
-  .grid{ grid-template-columns: 1fr; }   /* stack */
-  .photo{ justify-self: start; margin-top: 16px; }
-  .photo img{ width: 160px; height: 160px; } /* optional smaller avatar */
+
+/* --- Mobile-first: single column by default --- */
+.hero, .grid {
+  display: grid;
+  grid-template-columns: 1fr;     /* stack by default */
+  gap: 32px;
+  align-items: start;
+}
+.hero-photo, .photo { justify-self: start; }
+
+/* Float the headshot on desktop, stack inline on mobile */
+.with-float::after { content: ""; display: table; clear: both; } /* contain the float */
+
+.float-headshot {
+  float: right;
+  width: 220px;
+  margin: 4px 0 16px 24px; /* space between image and text */
+}
+.float-headshot img {
+  width: 100%;
+  height: auto;
+  border-radius: 50%;
+  border: 1px solid #e5e5ea;
+  display: block;
+}
+
+/* On small screens, stop floating and center it inline */
+@media (max-width: 700px) {
+  .float-headshot { float: none; width: 160px; margin: 12px auto 16px; }
+}
+/* Tighter reading width for paragraphs in the hero */
+.with-float p { max-width: 75ch; }        /* try 60–66ch to taste */
+.with-float .btnrow { max-width: 75ch; }  /* keeps buttons aligned with the copy */
+
+/* On small screens, let text use full width again */
+@media (max-width: 700px){
+  .with-float .btnrow { max-width: none; }
+}
+/* Tighter hero: shrink the whole block and center it */
+.with-float{
+  max-width: 750px;           /* try 780–900 to taste */
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Reduce the gap between text and photo */
+.float-headshot{ margin-left: 16px; }  /* was 24px */
+
+/* On wider screens, let text expand toward the photo */
+@media (min-width: 700px){
+  .with-float .btnrow{ max-width: none; }  /* override earlier 62ch cap */
+}
+
+/* Keep mobile behavior the same (inline + centered) */
+@media (max-width: 700px){
+  .float-headshot{ float: none !important; width: 160px; margin: 12px auto 16px; }
 }
