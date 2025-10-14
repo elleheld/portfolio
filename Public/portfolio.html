@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portfolio — Elle Held</title>
+  <meta name="description" content="Representative projects with diagrams and inline PDF runbooks.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site">
+    <nav aria-label="Primary">
+      <a href="index.html">Home — About</a>
+      <a class="active" href="portfolio.html">Portfolio</a>
+      <a href="resume.html">Résumé</a>
+    </nav>
+  </header>
+  <main class="container">
+    <h1>Portfolio</h1>
+    <p class="lede">Representative projects. Each section includes context, a diagram, and an inline PDF you can zoom or download.</p>
+
+    <article id="stretched-cluster" class="card">
+      <h2>Hyper‑V → Stretched Cluster Failover</h2>
+      <p><strong>Role:</strong> Lead Systems Engineer · <strong>Stack:</strong> Windows Server, Storage Replica, Veeam</p>
+      <div class="badges">
+        <span class="badge">RTO ↓ hours → minutes</span>
+        <span class="badge">Quarterly DR tests</span>
+        <span class="badge">Runbook + training</span>
+      </div>
+      <h3>Diagram</h3>
+      <figure>
+        <img src="assets/stretched-cluster-diagram.png" alt="Stretched cluster failover diagram">
+        <figcaption class="caption">Two‑site design with replication and witness.</figcaption>
+      </figure>
+      <h3>Runbook (PDF)</h3>
+      <div class="pdf-frame">
+        <object data="assets/failover-runbook.pdf" type="application/pdf" width="100%" height="100%">
+          <p>PDF preview not supported. <a href="assets/failover-runbook.pdf">Download the runbook.</a></p>
+        </object>
+      </div>
+    </article>
+
+    <article id="avd" class="card">
+      <h2>Azure Virtual Desktop for Non‑Profit</h2>
+      <p><strong>Role:</strong> Architect & PM · <strong>Stack:</strong> AVD, Microsoft 365, SharePoint, Intune</p>
+      <h3>Diagram</h3>
+      <figure>
+        <img src="assets/avd-overview.png" alt="AVD high‑level architecture">
+        <figcaption class="caption">50 seats, SharePoint storage, policy hardening.</figcaption>
+      </figure>
+      <h3>Project Plan (PDF)</h3>
+      <div class="pdf-frame">
+        <object data="assets/avd-project-plan.pdf" type="application/pdf" width="100%" height="100%">
+          <p>PDF preview not supported. <a href="assets/avd-project-plan.pdf">Download the plan.</a></p>
+        </object>
+      </div>
+    </article>
+
+    <article id="jumpcloud" class="card">
+      <h2>JumpCloud → Active Directory Migration</h2>
+      <p><strong>Role:</strong> Lead Engineer · <strong>Stack:</strong> AD DS, ForensiT, GPO Hardening</p>
+      <h3>Diagram</h3>
+      <figure>
+        <img src="assets/jumpcloud-ad.png" alt="JumpCloud to AD migration flow">
+        <figcaption class="caption">Accounts mapped, profiles migrated, post‑cutover hardening.</figcaption>
+      </figure>
+      <h3>Checklist (PDF)</h3>
+      <div class="pdf-frame">
+        <object data="assets/jumpcloud-to-ad-checklist.pdf" type="application/pdf" width="100%" height="100%">
+          <p>PDF preview not supported. <a href="assets/jumpcloud-to-ad-checklist.pdf">Download the checklist.</a></p>
+        </object>
+      </div>
+    </article>
+
+    <p class="small">Put PNG/SVG images and PDFs in <code>/assets</code>, then update filenames above.</p>
+  </main>
+  <footer class="site">© 2025-10-13 Elle Held</footer>
+</body>
+</html>
