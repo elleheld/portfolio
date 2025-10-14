@@ -173,3 +173,102 @@ footer.site {
 @media (max-width: 700px){
   .float-headshot{ float: none !important; width: 160px; margin: 12px auto 16px; }
 }
+
+
+/* ----- Résumé page (LinkedIn-ish with dividers) ----- */
+.resume { max-width: 860px; margin: 0 auto; }
+.resume .section + .section { margin-top: 28px; }
+.resume h2 { margin-top: 6px; }
+
+.resume .item {
+  padding: 16px 0;
+}
+.resume .item + .item {
+  border-top: 1px solid #e5e5ea;   /* the divider line you wanted */
+}
+
+.resume .role { font-weight: 700; font-size: 1.05rem; }
+.resume .company { color: #4f4f56; margin-top: 2px; }
+.resume .meta { color: #6a6a73; font-size: .95rem; margin-top: 2px; }
+.resume .desc { margin-top: 8px; }
+
+@media (max-width: 700px){
+  .resume { max-width: none; }
+}
+
+/* ---- Float the download button right ---- */
+.download-right { margin-bottom: 8px; }
+.download-right::after { content:""; display: table; clear: both; }
+.download-right .button { float: right; }
+
+/* ---- Right-floated org logos (placeholders) ---- */
+.org-logo{
+  float: right;
+  width: 96px;
+  height: 96px;
+  margin: 0 0 8px 16px;           /* space between logo and text */
+  border: 1px solid #e5e5ea;
+  border-radius: 10px;
+  background: #fafafa;            /* shows even before images exist */
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.org-logo img{
+  max-width: 88%;
+  max-height: 88%;
+  object-fit: contain;
+  display: block;
+}
+/* contain floats inside each item */
+.resume .item::after { content:""; display: table; clear: both; }
+
+/* Mobile: stop floating so they sit inline/center */
+@media (max-width: 700px){
+  .download-right .button { float: none; }
+  .org-logo{
+    float: none;
+    margin: 0 0 8px auto;         /* align to the right; use auto/auto to center */
+  }
+}
+
+/* Title + button on one line */
+.resume-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between; /* pushes button to the right */
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.resume-head h1{ margin: 0; }     /* remove extra gap above/below */
+.resume-head .button{ white-space: nowrap; }  /* prevent wrap inside button */
+
+/* Small screens: allow wrapping to a second line cleanly */
+@media (max-width: 520px){
+  .resume-head{ flex-wrap: wrap; row-gap: 8px; }
+  .resume-head .button{ margin-left: auto; }  /* keeps it right-aligned when it wraps */
+}
+
+.org-logo{
+  border: 3px solid #d3d6df;   /* 3px gray border */
+  border-radius: 12px;
+  background: #fff;
+}
+
+/* kill the inner border coming from figure img */
+.org-logo img{
+  border: 0 !important;        /* overrides the global figure img border */
+  border-radius: 0;             /* optional: keep square inside */
+  max-width: 88%;
+  max-height: 88%;
+  object-fit: contain;
+}
+
+/* keep the float + spacing (already in your sheet, repeated here in case) */
+.org-logo{
+  float: right;
+  width: 96px;
+  height: 96px;
+  margin: 0 0 8px 16px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
