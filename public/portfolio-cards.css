@@ -18,3 +18,25 @@
 }
 .tile-cap{ color:#1a1a1a; font-size:.95rem; }
 .project-context{ color:#4f4f56; margin-top:6px; margin-bottom:10px; }
+
+/* Compact mobile grid: 2 columns (2x2), tighter tiles */
+@media (max-width: 520px){
+  .tile-grid{
+    grid-template-columns: repeat(2, 1fr);  /* was 1fr */
+    gap: 10px;                               /* tighter spacing */
+  }
+  .tile{
+    padding: 6px;                            /* smaller card padding */
+    border-radius: 8px;
+  }
+  .tile .thumb{
+    height: 130px;                           /* shorter thumbs for small screens */
+    border-radius: 6px;
+  }
+  .tile-cap{
+    font-size: .85rem;                       /* smaller caption */
+    line-height: 1.2;
+  }
+  /* Optional: tighten card body */
+  .project-context{ margin-bottom: 8px; }
+}
