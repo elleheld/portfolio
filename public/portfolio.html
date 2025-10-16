@@ -4,8 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Portfolio — Elle Held</title>
-  <meta name="description" content="Representative projects with diagrams and inline PDF runbooks.">
-  <link rel="stylesheet" href="styles.css">
+  <meta name="description" content="Project plans, diagrams, and runbooks by Elle Held.">
+  <link rel="stylesheet" href="styles.css?v=15">
+  <link rel="stylesheet" href="portfolio-cards.css?v=1">
 </head>
 <body>
   <header class="site">
@@ -15,65 +16,116 @@
       <a href="resume.html">Résumé</a>
     </nav>
   </header>
+
   <main class="container">
     <h1>Portfolio</h1>
-    <p class="lede">Representative projects. Each section includes context, a diagram, and an inline PDF you can zoom or download.</p>
+    <p class="lede">Click any tile to open the full PDF in a new tab. Thumbnails are rendered from page 1 of each document.</p>
 
-    <article id="stretched-cluster" class="card">
-      <h2>Hyper‑V → Stretched Cluster Failover</h2>
-      <p><strong>Role:</strong> Lead Systems Engineer · <strong>Stack:</strong> Windows Server, Storage Replica, Veeam</p>
-      <div class="badges">
-        <span class="badge">RTO ↓ hours → minutes</span>
-        <span class="badge">Quarterly DR tests</span>
-        <span class="badge">Runbook + training</span>
-      </div>
-      <h3>Diagram</h3>
-      <figure>
-        <img src="assets/stretched-cluster-diagram.png" alt="Stretched cluster failover diagram">
-        <figcaption class="caption">Two‑site design with replication and witness.</figcaption>
-      </figure>
-      <h3>Runbook (PDF)</h3>
-      <div class="pdf-frame">
-        <object data="assets/failover-runbook.pdf" type="application/pdf" width="100%" height="100%">
-          <p>PDF preview not supported. <a href="assets/failover-runbook.pdf">Download the runbook.</a></p>
-        </object>
-      </div>
-    </article>
+    <!-- Project 1 -->
+    <section class="card project">
+      <h2>Existing Server Optimization</h2>
+      <p class="project-context">
+        Consolidated aging hardware into a stable footprint, tuned storage/VM placement, and documented day-2 ops.
+        Result: higher performance, fewer failure domains, and predictable maintenance windows.
+      </p>
 
-    <article id="avd" class="card">
-      <h2>Azure Virtual Desktop for Non‑Profit</h2>
-      <p><strong>Role:</strong> Architect & PM · <strong>Stack:</strong> AVD, Microsoft 365, SharePoint, Intune</p>
-      <h3>Diagram</h3>
-      <figure>
-        <img src="assets/avd-overview.png" alt="AVD high‑level architecture">
-        <figcaption class="caption">50 seats, SharePoint storage, policy hardening.</figcaption>
-      </figure>
-      <h3>Project Plan (PDF)</h3>
-      <div class="pdf-frame">
-        <object data="assets/avd-project-plan.pdf" type="application/pdf" width="100%" height="100%">
-          <p>PDF preview not supported. <a href="assets/avd-project-plan.pdf">Download the plan.</a></p>
-        </object>
-      </div>
-    </article>
+      <div class="tile-grid">
+        <a class="tile" aria-label="Final Diagram (PDF)"
+           href="assets/examples/Project-1-Existing-Server-Optimization/Final-Diagram.pdf" target="_blank">
+          <div class="thumb" style="background-image:url('assets/examples/Project-1-Existing-Server-Optimization/thumb-final-diagram.png')"></div>
+          <span class="tile-cap">Final Diagram</span>
+        </a>
 
-    <article id="jumpcloud" class="card">
-      <h2>JumpCloud → Active Directory Migration</h2>
-      <p><strong>Role:</strong> Lead Engineer · <strong>Stack:</strong> AD DS, ForensiT, GPO Hardening</p>
-      <h3>Diagram</h3>
-      <figure>
-        <img src="assets/jumpcloud-ad.png" alt="JumpCloud to AD migration flow">
-        <figcaption class="caption">Accounts mapped, profiles migrated, post‑cutover hardening.</figcaption>
-      </figure>
-      <h3>Checklist (PDF)</h3>
-      <div class="pdf-frame">
-        <object data="assets/jumpcloud-to-ad-checklist.pdf" type="application/pdf" width="100%" height="100%">
-          <p>PDF preview not supported. <a href="assets/jumpcloud-to-ad-checklist.pdf">Download the checklist.</a></p>
-        </object>
-      </div>
-    </article>
+        <a class="tile" aria-label="Server Licensing (PDF)"
+           href="assets/examples/Project-1-Existing-Server-Optimization/Server-Licensing.pdf" target="_blank">
+          <div class="thumb" style="background-image:url('assets/examples/Project-1-Existing-Server-Optimization/thumb-server-licensing.png')"></div>
+          <span class="tile-cap">Server Licensing</span>
+        </a>
 
-    <p class="small">Put PNG/SVG images and PDFs in <code>/assets</code>, then update filenames above.</p>
+        <a class="tile" aria-label="Storage Plan (PDF)"
+           href="assets/examples/Project-1-Existing-Server-Optimization/Storage-Plan.pdf" target="_blank">
+          <div class="thumb" style="background-image:url('assets/examples/Project-1-Existing-Server-Optimization/thumb-storage-plan.png')"></div>
+          <span class="tile-cap">Storage Plan</span>
+        </a>
+
+        <a class="tile" aria-label="Virtual Infrastructure Plan (PDF)"
+           href="assets/examples/Project-1-Existing-Server-Optimization/Virtual-Infrastructure-Plan.pdf" target="_blank">
+          <div class="thumb" style="background-image:url('assets/examples/Project-1-Existing-Server-Optimization/thumb-virtual-infrastructure-plan.png')"></div>
+          <span class="tile-cap">Virtual Infrastructure Plan</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- Project 2 -->
+    <section class="card project">
+      <h2>Systems Migration</h2>
+      <p class="project-context">
+        Planned and executed a clean cutover with staged testing, identity mapping, and rollback points.
+        Result: zero-data-loss migration and documented post-cutover hardening.
+      </p>
+
+      <div class="tile-grid">
+        <a class="tile" aria-label="Existing vs Proposed (PDF)"
+           href="assets/examples/Project-2-Systems-Migration/Existing-v-Proposed.pdf" target="_blank">
+          <div class="thumb" style="background-image:url('assets/examples/Project-2-Systems-Migration/thumb-existing-v-proposed.png')"></div>
+          <span class="tile-cap">Existing vs Proposed</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- Project 3 -->
+    <section class="card project">
+      <h2>Existing Server Optimization (Variant)</h2>
+      <p class="project-context">
+        Tightened VM rightsizing and snapshot hygiene, tuned backups, and reduced noisy alerts.
+        Result: lower costs and a calmer on-call.
+      </p>
+
+      <div class="tile-grid">
+        <a class="tile" aria-label="Stakeholder Server Project Update (PDF)"
+           href="assets/examples/Project-3-Existing-Server-Optimization/Stakeholder-Server-Project-Update.pdf" target="_blank">
+          <div class="thumb" style="background-image:url('assets/examples/Project-3-Existing-Server-Optimization/thumb-stakeholder-server-project-update.png')"></div>
+          <span class="tile-cap">Stakeholder Update</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- Project 4 -->
+    <section class="card project">
+      <h2>Infrastructure Optimization</h2>
+      <p class="project-context">
+        Baseline → remediate → verify. Addressed storage contention, clarified failover paths, and standardized change windows.
+        Result: faster incident response and quarterly DR tests that actually run.
+      </p>
+
+      <div class="tile-grid">
+        <a class="tile" aria-label="PLAN: Lockdown Local Computers (PDF)"
+           href="assets/examples/Project-4-Infrastructure-Optimization/PLAN-Lockdown-Local-Computers.pdf" target="_blank">
+          <div class="thumb" style="background-image:url('assets/examples/Project-4-Infrastructure-Optimization/thumb-plan-lockdown-local-computers.png')"></div>
+          <span class="tile-cap">Lockdown Local Computers</span>
+        </a>
+
+        <a class="tile" aria-label="PLAN: Move to Fully Remote (PDF)"
+           href="assets/examples/Project-4-Infrastructure-Optimization/PLAN-Move-to-Fully-Remote.pdf" target="_blank">
+          <div class="thumb" style="background-image:url('assets/examples/Project-4-Infrastructure-Optimization/thumb-plan-move-to-fully-remote.png')"></div>
+          <span class="tile-cap">Move to Fully Remote</span>
+        </a>
+
+        <a class="tile" aria-label="PLAN: Server Failover (PDF)"
+           href="assets/examples/Project-4-Infrastructure-Optimization/PLAN-Server-Failover.pdf" target="_blank">
+          <div class="thumb" style="background-image:url('assets/examples/Project-4-Infrastructure-Optimization/thumb-plan-server-failover.png')"></div>
+          <span class="tile-cap">Server Failover</span>
+        </a>
+
+        <a class="tile" aria-label="Stakeholder Project Update (PDF)"
+           href="assets/examples/Project-4-Infrastructure-Optimization/Stakeholder-Project-Update-Example.pdf" target="_blank">
+          <div class="thumb" style="background-image:url('assets/examples/Project-4-Infrastructure-Optimization/thumb-stakeholder-project-update-example.png')"></div>
+          <span class="tile-cap">Stakeholder Update</span>
+        </a>
+      </div>
+    </section>
   </main>
-  <footer class="site">© 2025-10-13 Elle Held</footer>
+
+  <footer class="site">© 2025 Elle Held</footer>
 </body>
 </html>

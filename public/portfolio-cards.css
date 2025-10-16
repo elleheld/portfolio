@@ -1,0 +1,20 @@
+
+/* grid tiles */
+.tile-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+@media (max-width:1100px){ .tile-grid{ grid-template-columns:repeat(3,1fr);}}
+@media (max-width:800px){ .tile-grid{ grid-template-columns:repeat(2,1fr);}}
+@media (max-width:520px){ .tile-grid{ grid-template-columns:1fr;}}
+
+.tile{ display:flex; flex-direction:column; gap:6px; text-decoration:none; border:1px solid #e5e5ea; border-radius:10px; padding:8px; background:#fff; }
+.tile:hover{ background:#fafafa; }
+.tile .thumb{
+  width:100%; height:180px;
+  background:#f1f2f6 center/cover no-repeat;
+  border:1px solid #e5e5ea; border-radius:8px; position:relative; overflow:hidden;
+}
+.tile .thumb.no-thumb{ background:#f6f7fb; }
+.tile .thumb-fallback{
+  position:absolute; inset:auto 8px 8px auto; background:#fff; border:1px solid #e5e5ea; border-radius:6px; padding:2px 6px; font-size:.8rem; color:#6a6a73;
+}
+.tile-cap{ color:#1a1a1a; font-size:.95rem; }
+.project-context{ color:#4f4f56; margin-top:6px; margin-bottom:10px; }
