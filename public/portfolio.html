@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Portfolio — Elle Held</title>
-  <meta name="description" content="Project plans, diagrams, and runbooks by Elle Held.">
-  <link rel="stylesheet" href="styles.css?v=15">
-  <link rel="stylesheet" href="portfolio-cards.css?v=1">
+  <meta name="description" content="Case-study style portfolio: Problem → Solution → Result with linked PDFs.">
+  <link rel="stylesheet" href="styles.css?v=17">
+  <link rel="stylesheet" href="portfolio-cards.css?v=6">
 </head>
 <body>
   <header class="site">
@@ -19,111 +19,138 @@
 
   <main class="container">
     <h1>Portfolio</h1>
-    <p class="lede">Click any tile to open the full PDF in a new tab. Thumbnails are rendered from page 1 of each document.</p>
+    <p class="lede">Click any tile to open the full PDF in a new tab.</p>
 
-    <!-- Project 1 -->
-    <section class="card project">
-      <h2>Existing Server Optimization</h2>
-      <p class="project-context">
-        Consolidated aging hardware into a stable footprint, tuned storage/VM placement, and documented day-2 ops.
-        Result: higher performance, fewer failure domains, and predictable maintenance windows.
+    <!-- ========== PROJECT ONE ========== -->
+    <section class="project-card">
+      <h2>Project One — Complex Existing Server Optimization</h2>
+
+      <p><span class="lbl lbl-problem">Problem</span>
+        This customer had a previous MSP that was unable to deliver on a server upgrade project and this company had server infrastructure that was in disarray. 2012 servers in use.
       </p>
 
-      <div class="tile-grid">
-        <a class="tile" aria-label="Final Diagram (PDF)"
-           href="assets/examples/Project-1-Existing-Server-Optimization/Final-Diagram.pdf" target="_blank">
-          <div class="thumb" style="background-image:url('assets/examples/Project-1-Existing-Server-Optimization/thumb-final-diagram.png')"></div>
-          <span class="tile-cap">Final Diagram</span>
-        </a>
+      <p><span class="lbl lbl-solution">Solution</span>
+        Rebuild the entire server infrastructure and failover cluster from scratch ensuring zero downtime and full use of existing storage and hardware. Decommission 2012 servers and virtualize their workloads.
+      </p>
 
-        <a class="tile" aria-label="Server Licensing (PDF)"
-           href="assets/examples/Project-1-Existing-Server-Optimization/Server-Licensing.pdf" target="_blank">
-          <div class="thumb" style="background-image:url('assets/examples/Project-1-Existing-Server-Optimization/thumb-server-licensing.png')"></div>
-          <span class="tile-cap">Server Licensing</span>
-        </a>
+      <p><span class="lbl lbl-result">Result</span>
+        I created all the diagrams used for planning that were presented to the business owner.
+      </p>
 
-        <a class="tile" aria-label="Storage Plan (PDF)"
-           href="assets/examples/Project-1-Existing-Server-Optimization/Storage-Plan.pdf" target="_blank">
-          <div class="thumb" style="background-image:url('assets/examples/Project-1-Existing-Server-Optimization/thumb-storage-plan.png')"></div>
-          <span class="tile-cap">Storage Plan</span>
-        </a>
+      <ul class="key-points">
+        <li><strong>Virtual Infrastructure Plan</strong> included all of the existing hardware and storage and the most efficient way I found to consolidate everything.</li>
+        <li><strong>Storage Plan</strong> includes the existing storage volumes and how I was going to organize them.</li>
+        <li><strong>Server Licensing</strong> broke down the existing licensing (uncompliant) and the new licensing requirement for Windows Server 2022.</li>
+        <li><strong>Final Diagram</strong> is the final result. We were able to execute this plan with one late night onsite visit and zero downtime for the customer.</li>
+      </ul>
 
-        <a class="tile" aria-label="Virtual Infrastructure Plan (PDF)"
-           href="assets/examples/Project-1-Existing-Server-Optimization/Virtual-Infrastructure-Plan.pdf" target="_blank">
-          <div class="thumb" style="background-image:url('assets/examples/Project-1-Existing-Server-Optimization/thumb-virtual-infrastructure-plan.png')"></div>
-          <span class="tile-cap">Virtual Infrastructure Plan</span>
+      <!-- Order follows the narrative above -->
+      <div class="thumb-grid">
+        <a class="thumb" href="assets/examples/Project-1-Existing-Server-Optimization/Virtual-Infrastructure-Plan.pdf" target="_blank" aria-label="Virtual Infrastructure Plan (PDF)">
+          <img src="assets/examples/Project-1-Existing-Server-Optimization/thumb-virtual-infrastructure-plan.png" alt="">
+          <span>Virtual Infrastructure Plan</span>
+        </a>
+        <a class="thumb" href="assets/examples/Project-1-Existing-Server-Optimization/Storage-Plan.pdf" target="_blank" aria-label="Storage Plan (PDF)">
+          <img src="assets/examples/Project-1-Existing-Server-Optimization/thumb-storage-plan.png" alt="">
+          <span>Storage Plan</span>
+        </a>
+        <a class="thumb" href="assets/examples/Project-1-Existing-Server-Optimization/Server-Licensing.pdf" target="_blank" aria-label="Server Licensing (PDF)">
+          <img src="assets/examples/Project-1-Existing-Server-Optimization/thumb-server-licensing.png" alt="">
+          <span>Server Licensing</span>
+        </a>
+        <a class="thumb" href="assets/examples/Project-1-Existing-Server-Optimization/Final-Diagram.pdf" target="_blank" aria-label="Final Diagram (PDF)">
+          <img src="assets/examples/Project-1-Existing-Server-Optimization/thumb-final-diagram.png" alt="">
+          <span>Final Diagram</span>
         </a>
       </div>
     </section>
 
-    <!-- Project 2 -->
-    <section class="card project">
-      <h2>Systems Migration</h2>
-      <p class="project-context">
-        Planned and executed a clean cutover with staged testing, identity mapping, and rollback points.
-        Result: zero-data-loss migration and documented post-cutover hardening.
+    <!-- ========== PROJECT TWO ========== -->
+    <section class="project-card">
+      <h2>Project Two — Infrastructure Optimization and Failover Setup</h2>
+
+      <p><span class="lbl lbl-problem">Problem</span>
+        This new customer was not fully utilizing their server infrastructure to reduce costs and improve workflow efficiency. They also had previously purchased a failover server for a stretch cluster that was never deployed.
       </p>
 
-      <div class="tile-grid">
-        <a class="tile" aria-label="Existing vs Proposed (PDF)"
-           href="assets/examples/Project-2-Systems-Migration/Existing-v-Proposed.pdf" target="_blank">
-          <div class="thumb" style="background-image:url('assets/examples/Project-2-Systems-Migration/thumb-existing-v-proposed.png')"></div>
-          <span class="tile-cap">Existing vs Proposed</span>
+      <p><span class="lbl lbl-solution">Solution</span>
+        Migrate from using JumpCloud logins to unifying their workstations with a site-to-site VPN to ensure AD domain access. Then move their data and workloads to the existing RDS infrastructure. Followed by locking local PCs down with group policies and basic images. Finally, configure stretch failover cluster between two sites.
+      </p>
+
+      <p><span class="lbl lbl-result">Result</span>
+        An efficient AD environment with a stretch failover cluster for disaster recovery.
+      </p>
+
+      <ul class="key-points">
+        <li>I created the plans that were presented to the stakeholders and worked with onsite IT personnel to execute on the changes for unifying the domain.</li>
+        <li>I identified the existing server environment and how to fit it within a smaller physical server in another city. I came up with the plan and executed deployment of server including onsite install.</li>
+      </ul>
+
+      <!-- NOTE: stakeholder update REMOVED per your direction -->
+      <div class="thumb-grid">
+        <a class="thumb" href="assets/examples/Project-4-Infrastructure-Optimization/PLAN-Lockdown-Local-Computers.pdf" target="_blank" aria-label="Lockdown Local Computers (PDF)">
+          <img src="assets/examples/Project-4-Infrastructure-Optimization/thumb-plan-lockdown-local-computers.png" alt="">
+          <span>Lockdown Local Computers</span>
+        </a>
+        <a class="thumb" href="assets/examples/Project-4-Infrastructure-Optimization/PLAN-Move-to-Fully-Remote.pdf" target="_blank" aria-label="Move to Fully Remote (PDF)">
+          <img src="assets/examples/Project-4-Infrastructure-Optimization/thumb-plan-move-to-fully-remote.png" alt="">
+          <span>Move to Fully Remote</span>
+        </a>
+        <a class="thumb" href="assets/examples/Project-4-Infrastructure-Optimization/PLAN-Server-Failover.pdf" target="_blank" aria-label="Server Failover (PDF)">
+          <img src="assets/examples/Project-4-Infrastructure-Optimization/thumb-plan-server-failover.png" alt="">
+          <span>Server Failover</span>
         </a>
       </div>
     </section>
 
-    <!-- Project 3 -->
-    <section class="card project">
-      <h2>Existing Server Optimization (Variant)</h2>
-      <p class="project-context">
-        Tightened VM rightsizing and snapshot hygiene, tuned backups, and reduced noisy alerts.
-        Result: lower costs and a calmer on-call.
+    <!-- ========== PROJECT THREE ========== -->
+    <section class="project-card">
+      <h2>Project Three — Smaller Server Optimization</h2>
+
+      <p><span class="lbl lbl-problem">Problem</span>
+        Our MSP inherited this customer who had a server that was underperforming.
       </p>
 
-      <div class="tile-grid">
-        <a class="tile" aria-label="Stakeholder Server Project Update (PDF)"
-           href="assets/examples/Project-3-Existing-Server-Optimization/Stakeholder-Server-Project-Update.pdf" target="_blank">
-          <div class="thumb" style="background-image:url('assets/examples/Project-3-Existing-Server-Optimization/thumb-stakeholder-server-project-update.png')"></div>
-          <span class="tile-cap">Stakeholder Update</span>
+      <p><span class="lbl lbl-solution">Solution</span>
+        Optimize existing infrastructure to boost performance 4×.
+      </p>
+
+      <p><span class="lbl lbl-result">Result</span>
+        I investigated the server and found everything that would immediately lead to a performance increase if corrected. I executed on all of those things and informed the satisfied customer what all was done in the stakeholder update.
+      </p>
+
+      <div class="thumb-grid">
+        <a class="thumb" href="assets/examples/Project-3-Existing-Server-Optimization/Stakeholder-Server-Project-Update.pdf" target="_blank" aria-label="Stakeholder Update (PDF)">
+          <img src="assets/examples/Project-3-Existing-Server-Optimization/thumb-stakeholder-server-project-update.png" alt="">
+          <span>Stakeholder Update</span>
         </a>
       </div>
     </section>
 
-    <!-- Project 4 -->
-    <section class="card project">
-      <h2>Infrastructure Optimization</h2>
-      <p class="project-context">
-        Baseline → remediate → verify. Addressed storage contention, clarified failover paths, and standardized change windows.
-        Result: faster incident response and quarterly DR tests that actually run.
+    <!-- ========== PROJECT FOUR ========== -->
+    <section class="project-card">
+      <h2>Project Four — Moving infrastructure Onsite</h2>
+
+      <p><span class="lbl lbl-problem">Problem</span>
+        Our customer was outgrowing our multi-tenant RDS Cloud Desktop product.
       </p>
 
-      <div class="tile-grid">
-        <a class="tile" aria-label="PLAN: Lockdown Local Computers (PDF)"
-           href="assets/examples/Project-4-Infrastructure-Optimization/PLAN-Lockdown-Local-Computers.pdf" target="_blank">
-          <div class="thumb" style="background-image:url('assets/examples/Project-4-Infrastructure-Optimization/thumb-plan-lockdown-local-computers.png')"></div>
-          <span class="tile-cap">Lockdown Local Computers</span>
-        </a>
+      <p><span class="lbl lbl-solution">Solution</span>
+        Move to onsite infrastructure while keeping all data intact and zero downtime.
+      </p>
 
-        <a class="tile" aria-label="PLAN: Move to Fully Remote (PDF)"
-           href="assets/examples/Project-4-Infrastructure-Optimization/PLAN-Move-to-Fully-Remote.pdf" target="_blank">
-          <div class="thumb" style="background-image:url('assets/examples/Project-4-Infrastructure-Optimization/thumb-plan-move-to-fully-remote.png')"></div>
-          <span class="tile-cap">Move to Fully Remote</span>
-        </a>
+      <p><span class="lbl lbl-result">Result</span>
+        I created the diagram that was presented to the owners to secure the project. I came up with all of the plans and directed our employee to do all onsite setup and configuration. I successfully moved a SQL database from our datacenter to their server and ensured all data remained intact with zero downtime.
+      </p>
 
-        <a class="tile" aria-label="PLAN: Server Failover (PDF)"
-           href="assets/examples/Project-4-Infrastructure-Optimization/PLAN-Server-Failover.pdf" target="_blank">
-          <div class="thumb" style="background-image:url('assets/examples/Project-4-Infrastructure-Optimization/thumb-plan-server-failover.png')"></div>
-          <span class="tile-cap">Server Failover</span>
-        </a>
-
-        <a class="tile" aria-label="Stakeholder Project Update (PDF)"
-           href="assets/examples/Project-4-Infrastructure-Optimization/Stakeholder-Project-Update-Example.pdf" target="_blank">
-          <div class="thumb" style="background-image:url('assets/examples/Project-4-Infrastructure-Optimization/thumb-stakeholder-project-update-example.png')"></div>
-          <span class="tile-cap">Stakeholder Update</span>
+      <div class="thumb-grid">
+        <a class="thumb" href="assets/examples/Project-2-Systems-Migration/Existing-v-Proposed.pdf" target="_blank" aria-label="Existing vs Proposed (PDF)">
+          <img src="assets/examples/Project-2-Systems-Migration/thumb-existing-v-proposed.png" alt="">
+          <span>Existing vs Proposed</span>
         </a>
       </div>
     </section>
+
   </main>
 
   <footer class="site">© 2025 Elle Held</footer>

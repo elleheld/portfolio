@@ -1,42 +1,49 @@
-
-/* grid tiles */
-.tile-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
-@media (max-width:1100px){ .tile-grid{ grid-template-columns:repeat(3,1fr);}}
-@media (max-width:800px){ .tile-grid{ grid-template-columns:repeat(2,1fr);}}
-@media (max-width:520px){ .tile-grid{ grid-template-columns:1fr;}}
-
-.tile{ display:flex; flex-direction:column; gap:6px; text-decoration:none; border:1px solid #e5e5ea; border-radius:10px; padding:8px; background:#fff; }
-.tile:hover{ background:#fafafa; }
-.tile .thumb{
-  width:100%; height:180px;
-  background:#f1f2f6 center/cover no-repeat;
-  border:1px solid #e5e5ea; border-radius:8px; position:relative; overflow:hidden;
+/* ===== One-column, separated “cards” ===== */
+.project-card{
+  background:#fff;
+  border:1px solid #e5e5ea;
+  border-radius:12px;
+  padding:18px;
+  margin-block:16px;
+  box-shadow:0 1px 0 rgba(0,0,0,.02);
 }
-.tile .thumb.no-thumb{ background:#f6f7fb; }
-.tile .thumb-fallback{
-  position:absolute; inset:auto 8px 8px auto; background:#fff; border:1px solid #e5e5ea; border-radius:6px; padding:2px 6px; font-size:.8rem; color:#6a6a73;
-}
-.tile-cap{ color:#1a1a1a; font-size:.95rem; }
-.project-context{ color:#4f4f56; margin-top:6px; margin-bottom:10px; }
+.project-card h2{ margin:0 0 10px 0; }
+.project-context{ color:#4f4f56; margin:0 0 12px 0; }
 
-/* Compact mobile grid: 2 columns (2x2), tighter tiles */
-@media (max-width: 520px){
-  .tile-grid{
-    grid-template-columns: repeat(2, 1fr);  /* was 1fr */
-    gap: 10px;                               /* tighter spacing */
-  }
-  .tile{
-    padding: 6px;                            /* smaller card padding */
-    border-radius: 8px;
-  }
-  .tile .thumb{
-    height: 130px;                           /* shorter thumbs for small screens */
-    border-radius: 6px;
-  }
-  .tile-cap{
-    font-size: .85rem;                       /* smaller caption */
-    line-height: 1.2;
-  }
-  /* Optional: tighten card body */
-  .project-context{ margin-bottom: 8px; }
+/* Labels like your Word doc */
+.lbl{
+  display:inline-block; font-weight:700; margin-right:6px; padding:2px 6px;
+  border-radius:6px; font-size:.9rem; line-height:1;
 }
+.lbl-problem{ background:#fee2e2; color:#991b1b; }   /* red */
+.lbl-solution{ background:#dcfce7; color:#166534; }  /* green */
+.lbl-result{  background:#e0e7ff; color:#3730a3; }   /* indigo */
+
+.key-points{ margin:8px 0 14px 20px; }
+
+/* Thumbnail strip — 4-up desktop, tight like your screenshot */
+.thumb-grid{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0,1fr));
+  gap:12px;
+}
+@media (max-width:560px){
+  .thumb-grid{ grid-template-columns:repeat(2, 1fr); gap:10px; } /* 2×2 on mobile */
+}
+
+.thumb{
+  display:flex; flex-direction:column; gap:6px;
+  text-decoration:none; background:#fff;
+  border:1px solid #e5e5ea; border-radius:10px; padding:8px;
+  transition:transform .06s ease, background .06s ease;
+}
+.thumb:hover{ transform:translateY(-1px); background:#fafafa; }
+
+.thumb img{
+  width:100%; height:120px; object-fit:cover;
+  border-radius:6px; border:1px solid #e5e5ea; background:#f6f7fb;
+}
+.thumb span{ font-size:.9rem; color:#1a1a1a; line-height:1.25; }
+
+/* Make sure this component doesn't get clobbered by other styles */
+.thumb, .thumb *{ box-sizing:border-box; }
