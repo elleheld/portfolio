@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Content Tracker</title>
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body, #root { min-height: 100vh; }
+        body {
+            font-family: 'Quicksand', 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(145deg, #0d0515 0%, #1a0a2e 30%, #2d1458 60%, #1a0a2e 100%);
+            color: #e8e0f0;
+            -webkit-tap-highlight-color: transparent;
+        }
+        select option { background: #1a0a2e; color: #e8e0f0; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+const STORAGE_KEY = "ellemarie-posts-v2";
+
+const POST_TYPES = {
+  short: { label: "Short / Reel", icon: "\u{1F3AC}", platforms: ["instagram", "threads", "facebook", "tiktok", "youtube"] },
+  static: { label: "Static / Photo", icon: "\u{1F4F8}", platforms: ["instagram", "threads", "facebook", "tiktok"] },
+};
+
+const PLATFORM_INFO = {
+  instagram: { label: "IG", color: "#E1306C", auto: false },
+  threads: { label: "Threads", color: "#e0e0e0", auto: true, autoNote: "auto w/ IG" },
+  facebook: { label: "FB", color: "#1877F2", auto: true, autoNote: "mirrors IG" },
+  tiktok: { label: "TikTok", color: "#00f2ea", auto: false },
+  youtube: { label: "YT", color: "#FF0000", auto: false },
+};
+
+const STATUSES = [
+  { key: "concept", label: "Concept", color: "#7c4dba", bg: "rgba(124,77,186,0.15)" },
+  { key: "scripted", label: "Scripted", color: "#c084fc", bg: "rgba(192,132,252,0.15)" },
+  { key: "filmed", label: "Filmed", color: "#fb923c", bg: "rgba(251,146,60,0.15)" },
+  { key: "ready", label: "Ready to Post", color: "#38bdf8", bg: "rgba(56,189,248,0.15)" },
+  { key: "posted", label: "Posted", color: "#4ade80", bg: "rgba(74,222,128,0.15)" },
+];
+
+const defaultPost = () => ({
+  id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+  title: "",
+  type: "short",
+  status: "concept",
+  caption: "",
+  hashtags: "",
+  platforms: { instagram: false, threads: false, facebook: false, tiktok: false, youtube: false },
+  datePosted: "",
+  notes: "",
+  createdAt: new Date().toISOString(),
+});
+
+const SEED_POSTS = [
+  {
+    id: "seed01",
+    title: "Five Things I Actually Love About Being Trans",
+    type: "short",
+    status: "posted",
+    caption: "Transitioning is really scary and incredibly hard. It's still the best decision I made for myself. Despite all of the hardships and shitty things about being trans in 2026, I am still able to find tons of things to LOVE about being trans.",
+    hashtags: "#transgender #pridemonth #mtf #lgbt #joy",
+    platforms: { instagram: true, threads: true, facebook: true, tiktok: true, youtube: true },
+    datePosted: "",
+    notes: "Flagship post. 773 views on TikTok day 1. 830 views on YouTube Shorts. 1,713 views on Threads.",
+    createdAt: "2026-06-18T00:00:00Z",
+  },
+  {
+    id: "seed02",
+    title: "I've Had Two Glow Ups",
+    type: "static",
+    status: "posted",
+    caption: "Before I went on my journey of self discovery I tried to love myself the way I was born. I reached the peak of my physical fitness and where I believed my ceiling was as a man.\n\nDespite all of my efforts, I was still deeply unsatisfied with my life. I decided to finally start looking inward late 2024 and what I realized is that I was burying my true self for decades.\n\nNow I actually feel comfortable in my own skin. I feel beautiful and so happy I get to live the life I secretly always wanted. People have told me that I was attractive as a man but I really don't see it. I just feel amazing as a trans woman, and I'm ready to finally start living the rest of my life.",
+    hashtags: "#transition #timeline #glowup #mtf #trans",
+    platforms: { instagram: true, threads: true, facebook: true, tiktok: true, youtube: false },
+    datePosted: "",
+    notes: "Flagship post. Cross-posted to Threads, Bluesky, Twitter.",
+    createdAt: "2026-06-18T00:01:00Z",
+  },
+  {
+    id: "seed03",
+    title: "Pride Nails",
+    type: "static",
+    status: "posted",
+    caption: "Happy Pride Month y'all!",
+    hashtags: "",
+    platforms: { instagram: true, threads: true, facebook: true, tiktok: true, youtube: false },
+    datePosted: "",
+    notes: "Flagship post. 87 views on TikTok.",
+    createdAt: "2026-06-18T00:02:00Z",
+  },
+  {
+    id: "seed04",
+    title: "One Year Apart",
+    type: "static",
+    status: "posted",
+    caption: "Life's finally good \u{1F60A}",
+    hashtags: "#timeline #transgender #trans #transition #transformation",
+    platforms: { instagram: true, threads: false, facebook: true, tiktok: true, youtube: true },
+    datePosted: "",
+    notes: "371 views on TikTok. Posted on YT as photo since it fit square format.",
+    createdAt: "2026-06-18T00:03:00Z",
+  },
+  {
+    id: "seed05",
+    title: "One Thing I Learned After a Year",
+    type: "static",
+    status: "posted",
+    caption: "People seeing trans people just existing in public will go a long way toward acceptance.",
+    hashtags: "#lgbt #queer #trans #transgender #transrightsarehumanrights",
+    platforms: { instagram: true, threads: false, facebook: true, tiktok: true, youtube: false },
+    datePosted: "",
+    notes: "",
+    createdAt: "2026-06-18T00:04:00Z",
+  },
+  {
+    id: "seed06",
+    title: "Addressing Hate Speech",
+    type: "static",
+    status: "posted",
+    caption: "These are very real things that very real people have said to me. People who looked at a trans woman living her life and decided she doesn't deserve to exist.\n\nWords like these used to affect me. I'd feel good in the moment by shutting them down, but when the dust settled, I'd replay them. I'd spiral into dysphoria thinking this is my life now.\n\nBut now I am unaffected. You can call me every name you can think of. I'm still here. I'm still her. And I'm not going anywhere.\n\nIf you have received these types of hateful messages, know that they are trying really hard to get a reaction. The best thing to do is laugh to yourself and ignore them. Fighting against them is draining and never leads to any meaningful progress.\n\nYou are beautiful, you are incredible, you are amazing. These are the truths. Not the bullsh*t the bigots make up about us.",
+    hashtags: "#trans #pride #lgbt #mtf #transrightsarehumanrights",
+    platforms: { instagram: true, threads: false, facebook: true, tiktok: false, youtube: false },
+    datePosted: "",
+    notes: "",
+    createdAt: "2026-06-18T00:05:00Z",
+  },
+  {
+    id: "seed07",
+    title: "Reading Mean Comments (Full)",
+    type: "short",
+    status: "posted",
+    caption: "Some people are just so rude \u{1F602} And thank you @wreckedshell022 \u{2764}\u{FE0F}",
+    hashtags: "#trans #mtf #confidence #lgbt #transphobia",
+    platforms: { instagram: true, threads: false, facebook: true, tiktok: false, youtube: false },
+    datePosted: "",
+    notes: "Ongoing series potential.",
+    createdAt: "2026-06-18T00:06:00Z",
+  },
+  {
+    id: "seed08",
+    title: "Reading Mean Comments (Teaser)",
+    type: "short",
+    status: "posted",
+    caption: "Don't let idiots on the Internet ruin your day.",
+    hashtags: "",
+    platforms: { instagram: true, threads: false, facebook: true, tiktok: false, youtube: false },
+    datePosted: "",
+    notes: "Teaser clip driving to full reel.",
+    createdAt: "2026-06-18T00:07:00Z",
+  },
+  {
+    id: "seed09",
+    title: "POV Getting Gendered Correctly",
+    type: "short",
+    status: "posted",
+    caption: "I walked into a sub shop I go to often at work and the woman who is always there handing me my order said \"heyyy girrrlll!\"\n\nAlmost nothing feels better than being seen properly \u{1F970}",
+    hashtags: "#transgender #euphoria #transgirl #mtf #lgbt",
+    platforms: { instagram: true, threads: false, facebook: true, tiktok: false, youtube: false },
+    datePosted: "",
+    notes: "Viral POV reel.",
+    createdAt: "2026-06-18T00:08:00Z",
+  },
+];
+
+// localStorage helpers
+function loadPosts() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.posts && parsed.posts.length > 0) return parsed.posts;
+    }
+  } catch (e) { console.error("Load error:", e); }
+  // First visit — seed with known posts
+  savePosts(SEED_POSTS);
+  return SEED_POSTS;
+}
+
+function savePosts(posts) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ posts, updatedAt: new Date().toISOString() }));
+    return true;
+  } catch (e) { console.error("Save error:", e); return false; }
+}
+
+function ContentTracker() {
+  const [posts, setPosts] = useState(() => loadPosts());
+  const [expandedId, setExpandedId] = useState(null);
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterType, setFilterType] = useState("all");
+  const [saveStatus, setSaveStatus] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  const save = useCallback((updatedPosts) => {
+    setSaveStatus("saving");
+    const ok = savePosts(updatedPosts);
+    setSaveStatus(ok ? "saved" : "error");
+    setTimeout(() => setSaveStatus(""), 1500);
+  }, []);
+
+  const updatePost = (id, field, value) => {
+    const updated = posts.map((p) => {
+      if (p.id !== id) return p;
+      const newPost = { ...p, [field]: value };
+      if (field === "platforms") {
+        if (value.instagram && !p.platforms.instagram) {
+          newPost.platforms = { ...value, threads: true, facebook: true };
+        }
+      }
+      return newPost;
+    });
+    setPosts(updated);
+    save(updated);
+  };
+
+  const togglePlatform = (id, platform) => {
+    const post = posts.find((p) => p.id === id);
+    if (!post) return;
+    const newPlatforms = { ...post.platforms, [platform]: !post.platforms[platform] };
+    if (platform === "instagram" && !post.platforms.instagram) {
+      newPlatforms.threads = true;
+      newPlatforms.facebook = true;
+    }
+    updatePost(id, "platforms", newPlatforms);
+  };
+
+  const addPost = () => {
+    const newPost = defaultPost();
+    const updated = [newPost, ...posts];
+    setPosts(updated);
+    setExpandedId(newPost.id);
+    setAdding(true);
+    save(updated);
+  };
+
+  const deletePost = (id) => {
+    const updated = posts.filter((p) => p.id !== id);
+    setPosts(updated);
+    setExpandedId(null);
+    save(updated);
+  };
+
+  const duplicatePost = (id) => {
+    const source = posts.find((p) => p.id === id);
+    if (!source) return;
+    const newPost = {
+      ...source,
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      title: source.title + " (copy)",
+      platforms: { instagram: false, threads: false, facebook: false, tiktok: false, youtube: false },
+      status: "concept",
+      datePosted: "",
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [newPost, ...posts];
+    setPosts(updated);
+    setExpandedId(newPost.id);
+    save(updated);
+  };
+
+  const movePost = (id, direction) => {
+    const idx = posts.findIndex((p) => p.id === id);
+    if (idx < 0) return;
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= posts.length) return;
+    const updated = [...posts];
+    [updated[idx], updated[newIdx]] = [updated[newIdx], updated[idx]];
+    setPosts(updated);
+    save(updated);
+  };
+
+  const filtered = posts.filter((p) => {
+    if (filterStatus !== "all" && p.status !== filterStatus) return false;
+    if (filterType !== "all" && p.type !== filterType) return false;
+    return true;
+  });
+
+  const statusCounts = STATUSES.reduce((acc, s) => {
+    acc[s.key] = posts.filter((p) => p.status === s.key).length;
+    return acc;
+  }, {});
+
+  const platformCounts = Object.keys(PLATFORM_INFO).reduce((acc, p) => {
+    acc[p] = posts.filter((post) => post.platforms[p]).length;
+    return acc;
+  }, {});
+
+  return (
+    <div style={styles.container}>
+      <div style={styles.header}>
+        <div style={styles.headerTop}>
+          <h1 style={styles.title}>miss.ellemarie</h1>
+          <div style={styles.saveIndicator}>
+            {saveStatus === "saving" && <span style={{ color: "#c084fc" }}>saving...</span>}
+            {saveStatus === "saved" && <span style={{ color: "#4ade80" }}>{"\u2713"} saved</span>}
+            {saveStatus === "error" && <span style={{ color: "#ef4444" }}>save failed</span>}
+          </div>
+        </div>
+        <p style={styles.subtitle}>content tracker</p>
+
+        <div style={styles.statsRow}>
+          {STATUSES.map((s) => (
+            <div
+              key={s.key}
+              onClick={() => setFilterStatus(filterStatus === s.key ? "all" : s.key)}
+              style={{
+                ...styles.statChip,
+                background: filterStatus === s.key ? s.bg : "rgba(255,255,255,0.04)",
+                borderColor: filterStatus === s.key ? s.color : "rgba(255,255,255,0.08)",
+              }}
+            >
+              <span style={{ color: s.color, fontWeight: 700, fontSize: "1rem" }}>{statusCounts[s.key] || 0}</span>
+              <span style={{ color: "rgba(200,180,230,0.6)", fontSize: "0.65rem" }}>{s.label}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={styles.statsRow}>
+          {Object.entries(PLATFORM_INFO).map(([key, info]) => (
+            <div key={key} style={{ ...styles.statChip, background: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.08)" }}>
+              <span style={{ color: info.color, fontWeight: 700, fontSize: "1rem" }}>{platformCounts[key] || 0}</span>
+              <span style={{ color: "rgba(200,180,230,0.6)", fontSize: "0.65rem" }}>{info.label}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={styles.controls}>
+          <div style={styles.filterRow}>
+            <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={styles.select}>
+              <option value="all">All types</option>
+              <option value="short">Shorts / Reels</option>
+              <option value="static">Static / Photos</option>
+            </select>
+            {(filterStatus !== "all" || filterType !== "all") && (
+              <button onClick={() => { setFilterStatus("all"); setFilterType("all"); }} style={styles.clearBtn}>Clear filters</button>
+            )}
+          </div>
+          <button onClick={addPost} style={styles.addBtn}>+ New Post</button>
+        </div>
+      </div>
+
+      <div style={styles.list}>
+        {filtered.length === 0 && (
+          <div style={styles.empty}>{posts.length === 0 ? "No posts yet \u2014 tap + New Post to start" : "No posts match these filters"}</div>
+        )}
+
+        {filtered.map((post) => {
+          const isExpanded = expandedId === post.id;
+          const statusInfo = STATUSES.find((s) => s.key === post.status) || STATUSES[0];
+          const typeInfo = POST_TYPES[post.type] || POST_TYPES.short;
+          const postedCount = Object.values(post.platforms).filter(Boolean).length;
+          const totalPlatforms = typeInfo.platforms.length;
+
+          return (
+            <div key={post.id} style={{ ...styles.card, borderLeftColor: statusInfo.color }}>
+              <div onClick={() => { setExpandedId(isExpanded ? null : post.id); setAdding(false); }} style={styles.cardHeader}>
+                <div style={styles.cardHeaderLeft}>
+                  <span style={{ fontSize: "1rem" }}>{typeInfo.icon}</span>
+                  <div>
+                    <div style={styles.cardTitle}>{post.title || "Untitled"}</div>
+                    <div style={styles.cardMeta}>
+                      <span style={{ color: statusInfo.color, fontWeight: 600, fontSize: "0.7rem" }}>{statusInfo.label}</span>
+                      <span style={styles.dot}>{"\u00B7"}</span>
+                      <span style={{ fontSize: "0.7rem", color: "rgba(200,180,230,0.5)" }}>{postedCount}/{totalPlatforms} platforms</span>
+                    </div>
+                  </div>
+                </div>
+                <div style={styles.platformDots}>
+                  {typeInfo.platforms.map((p) => (
+                    <div key={p} style={{
+                      width: 8, height: 8, borderRadius: "50%",
+                      background: post.platforms[p] ? PLATFORM_INFO[p].color : "rgba(255,255,255,0.1)",
+                      border: "1px solid " + (post.platforms[p] ? PLATFORM_INFO[p].color : "rgba(255,255,255,0.15)"),
+                    }} title={PLATFORM_INFO[p].label} />
+                  ))}
+                </div>
+              </div>
+
+              {isExpanded && (
+                <div style={styles.editor}>
+                  <input type="text" value={post.title} onChange={(e) => updatePost(post.id, "title", e.target.value)}
+                    placeholder="Post title..." style={styles.inputTitle} autoFocus={adding} />
+
+                  <div style={styles.row}>
+                    <select value={post.type} onChange={(e) => updatePost(post.id, "type", e.target.value)} style={styles.select}>
+                      {Object.entries(POST_TYPES).map(([k, v]) => (<option key={k} value={k}>{v.icon} {v.label}</option>))}
+                    </select>
+                    <select value={post.status} onChange={(e) => updatePost(post.id, "status", e.target.value)} style={styles.select}>
+                      {STATUSES.map((s) => (<option key={s.key} value={s.key}>{s.label}</option>))}
+                    </select>
+                  </div>
+
+                  <textarea value={post.caption} onChange={(e) => updatePost(post.id, "caption", e.target.value)}
+                    placeholder="Caption..." style={styles.textarea} rows={3} />
+
+                  <input type="text" value={post.hashtags} onChange={(e) => updatePost(post.id, "hashtags", e.target.value)}
+                    placeholder="#hashtags..." style={styles.inputHashtags} />
+
+                  <div style={styles.platformSection}>
+                    <div style={styles.platformLabel}>
+                      {post.type === "short" ? "IG \u2192 Threads+FB (auto) \u2192 TikTok \u2192 YouTube" : "IG + TikTok \u2192 Threads+FB (auto)"}
+                    </div>
+                    <div style={styles.platformGrid}>
+                      {POST_TYPES[post.type].platforms.map((p) => {
+                        const info = PLATFORM_INFO[p];
+                        return (
+                          <button key={p} onClick={() => togglePlatform(post.id, p)} style={{
+                            ...styles.platformBtn,
+                            background: post.platforms[p] ? info.color + "22" : "rgba(255,255,255,0.04)",
+                            borderColor: post.platforms[p] ? info.color : "rgba(255,255,255,0.1)",
+                            opacity: info.auto ? 0.7 : 1,
+                          }}>
+                            <span style={{ color: post.platforms[p] ? info.color : "rgba(200,180,230,0.5)", fontWeight: 600, fontSize: "0.8rem" }}>{info.label}</span>
+                            {post.platforms[p] && <span style={{ fontSize: "0.7rem" }}>{"\u2713"}</span>}
+                            {info.auto && <span style={{ fontSize: "0.55rem", color: "rgba(200,180,230,0.4)" }}>{info.autoNote}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div style={styles.row}>
+                    <input type="date" value={post.datePosted} onChange={(e) => updatePost(post.id, "datePosted", e.target.value)}
+                      style={styles.dateInput} />
+                  </div>
+                  <textarea value={post.notes} onChange={(e) => updatePost(post.id, "notes", e.target.value)}
+                    placeholder="Notes (performance, ideas, etc)..." style={{ ...styles.textarea, fontSize: "0.8rem" }} rows={2} />
+
+                  <div style={styles.actions}>
+                    <div style={styles.actionsLeft}>
+                      <button onClick={() => movePost(post.id, -1)} style={styles.actionBtn} title="Move up">{"\u2191"}</button>
+                      <button onClick={() => movePost(post.id, 1)} style={styles.actionBtn} title="Move down">{"\u2193"}</button>
+                      <button onClick={() => duplicatePost(post.id)} style={styles.actionBtn} title="Duplicate">{"\u29C9"}</button>
+                    </div>
+                    <button onClick={() => deletePost(post.id)} style={styles.deleteBtn}>Delete</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const styles = {
+  container: { minHeight: "100vh", padding: "0 0 100px 0" },
+  header: {
+    padding: "1.25rem 1rem 0.75rem",
+    borderBottom: "1px solid rgba(168,130,220,0.1)",
+    position: "sticky", top: 0, zIndex: 10,
+    background: "linear-gradient(145deg, #0d0515 0%, #1a0a2e 100%)",
+  },
+  headerTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
+  title: { fontSize: "1.3rem", fontWeight: 700, margin: 0, color: "#f0eaf8" },
+  subtitle: { fontSize: "0.75rem", color: "rgba(200,180,230,0.4)", margin: "0.1rem 0 0.75rem" },
+  saveIndicator: { fontSize: "0.75rem" },
+  statsRow: { display: "flex", gap: "0.4rem", marginBottom: "0.75rem", flexWrap: "wrap" },
+  statChip: {
+    display: "flex", flexDirection: "column", alignItems: "center", gap: "0.1rem",
+    padding: "0.35rem 0.6rem", borderRadius: "8px",
+    border: "1px solid rgba(255,255,255,0.08)",
+    cursor: "pointer", flex: 1, minWidth: "55px",
+    transition: "all 0.15s ease",
+  },
+  controls: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" },
+  filterRow: { display: "flex", gap: "0.4rem", alignItems: "center" },
+  select: {
+    background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "8px", color: "#e8e0f0", padding: "0.4rem 0.5rem",
+    fontSize: "0.8rem", outline: "none", flex: 1, fontFamily: "inherit",
+  },
+  clearBtn: {
+    background: "none", border: "none", color: "rgba(200,180,230,0.5)",
+    fontSize: "0.75rem", cursor: "pointer", padding: "0.3rem", fontFamily: "inherit",
+  },
+  addBtn: {
+    background: "rgba(124,77,186,0.3)", border: "1px solid rgba(124,77,186,0.5)",
+    borderRadius: "8px", color: "#c084fc", padding: "0.4rem 0.75rem",
+    fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit",
+  },
+  list: { padding: "0.5rem" },
+  empty: { textAlign: "center", color: "rgba(200,180,230,0.3)", padding: "3rem 1rem", fontSize: "0.85rem" },
+  card: {
+    background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
+    borderLeft: "3px solid", borderRadius: "10px", marginBottom: "0.5rem", overflow: "hidden",
+  },
+  cardHeader: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    padding: "0.75rem 0.75rem", cursor: "pointer",
+  },
+  cardHeaderLeft: { display: "flex", alignItems: "center", gap: "0.6rem", flex: 1, minWidth: 0 },
+  cardTitle: {
+    fontSize: "0.9rem", fontWeight: 600, color: "#f0eaf8",
+    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+  },
+  cardMeta: { display: "flex", alignItems: "center", gap: "0.3rem", marginTop: "0.15rem" },
+  dot: { color: "rgba(200,180,230,0.3)", fontSize: "0.7rem" },
+  platformDots: { display: "flex", gap: "4px", alignItems: "center", flexShrink: 0, marginLeft: "0.5rem" },
+  editor: {
+    padding: "0 0.75rem 0.75rem", display: "flex", flexDirection: "column", gap: "0.5rem",
+    borderTop: "1px solid rgba(255,255,255,0.05)",
+  },
+  inputTitle: {
+    background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "8px", color: "#f0eaf8", padding: "0.6rem 0.65rem",
+    fontSize: "1rem", fontWeight: 600, outline: "none",
+    width: "100%", boxSizing: "border-box", marginTop: "0.5rem", fontFamily: "inherit",
+  },
+  row: { display: "flex", gap: "0.4rem" },
+  textarea: {
+    background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "8px", color: "#e8e0f0", padding: "0.55rem 0.65rem",
+    fontSize: "0.85rem", outline: "none", resize: "vertical",
+    width: "100%", boxSizing: "border-box", fontFamily: "inherit", lineHeight: 1.5,
+  },
+  inputHashtags: {
+    background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "8px", color: "#c084fc", padding: "0.45rem 0.65rem",
+    fontSize: "0.8rem", outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit",
+  },
+  platformSection: { display: "flex", flexDirection: "column", gap: "0.35rem" },
+  platformLabel: { fontSize: "0.65rem", color: "rgba(200,180,230,0.35)", fontWeight: 500 },
+  platformGrid: { display: "flex", gap: "0.35rem", flexWrap: "wrap" },
+  platformBtn: {
+    display: "flex", flexDirection: "column", alignItems: "center", gap: "0.1rem",
+    padding: "0.4rem 0.6rem", borderRadius: "8px",
+    border: "1px solid", cursor: "pointer", minWidth: "52px",
+    background: "none", transition: "all 0.15s ease", fontFamily: "inherit",
+  },
+  dateInput: {
+    background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "8px", color: "#e8e0f0", padding: "0.4rem 0.5rem",
+    fontSize: "0.8rem", outline: "none", flex: 1, colorScheme: "dark", fontFamily: "inherit",
+  },
+  actions: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    paddingTop: "0.25rem", borderTop: "1px solid rgba(255,255,255,0.05)",
+  },
+  actionsLeft: { display: "flex", gap: "0.3rem" },
+  actionBtn: {
+    background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "6px", color: "rgba(200,180,230,0.5)", padding: "0.3rem 0.5rem",
+    fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit",
+  },
+  deleteBtn: {
+    background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
+    borderRadius: "6px", color: "#ef4444", padding: "0.3rem 0.6rem",
+    fontSize: "0.75rem", cursor: "pointer", fontFamily: "inherit",
+  },
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<ContentTracker />);
+    </script>
+</body>
+</html>
