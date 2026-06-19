@@ -204,6 +204,11 @@ function ContentTracker() {
   const [filterPlatform, setFilterPlatform] = useState("all");
   const [saveStatus, setSaveStatus] = useState("");
   const [adding, setAdding] = useState(false);
+  const [ghPat, setGhPat] = useState(() => localStorage.getItem("ellemarie-gh-pat") || "");
+  const [ghRepo, setGhRepo] = useState(() => localStorage.getItem("ellemarie-gh-repo") || "");
+  const [ghPath, setGhPath] = useState(() => localStorage.getItem("ellemarie-gh-path") || "tracker-backup.json");
+  const [ghStatus, setGhStatus] = useState("");
+  const [showGhSettings, setShowGhSettings] = useState(false);
 
   const save = useCallback((updatedPosts) => {
     setSaveStatus("saving");
@@ -283,6 +288,92 @@ function ContentTracker() {
     save(updated);
   };
 
+  const exportJSON = () => {
+    const data = JSON.stringify({ posts, exportedAt: new Date().toISOString() }, null, 2);
+    const url = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importJSON = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.target.result);
+        const imported = Array.isArray(parsed) ? parsed : parsed.posts;
+        if (Array.isArray(imported)) { setPosts(imported); save(imported); }
+        else alert("Couldn't read backup — unexpected format.");
+      } catch { alert("Invalid JSON file."); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const saveGhSettings = () => {
+    localStorage.setItem("ellemarie-gh-pat", ghPat);
+    localStorage.setItem("ellemarie-gh-repo", ghRepo);
+    localStorage.setItem("ellemarie-gh-path", ghPath);
+    setShowGhSettings(false);
+  };
+
+  const ghHeaders = { Authorization: `token ${ghPat}`, Accept: "application/vnd.github.v3+json", "Content-Type": "application/json" };
+
+  const ghErrorMsg = (status) => {
+    if (status === 401) return "bad token — check your PAT";
+    if (status === 403) return "no permission — token needs Contents write";
+    if (status === 404) return "repo not found — check owner/repo";
+    return `failed (${status})`;
+  };
+
+  const testGitHub = async () => {
+    if (!ghPat || !ghRepo) return;
+    setGhStatus("testing...");
+    try {
+      const [owner, repo] = ghRepo.split("/");
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers: ghHeaders });
+      setGhStatus(res.ok ? "token works ✓" : ghErrorMsg(res.status));
+    } catch { setGhStatus("network error"); }
+    setTimeout(() => setGhStatus(""), 4000);
+  };
+
+  const backupToGitHub = async () => {
+    if (!ghPat || !ghRepo) { setShowGhSettings(true); return; }
+    setGhStatus("backing up...");
+    try {
+      const [owner, repo] = ghRepo.split("/");
+      const url = `https://api.github.com/repos/${owner}/${repo}/contents/${ghPath}`;
+      const content = btoa(unescape(encodeURIComponent(JSON.stringify({ posts, backedUpAt: new Date().toISOString() }, null, 2))));
+      let sha;
+      const getRes = await fetch(url, { headers: ghHeaders });
+      if (getRes.ok) sha = (await getRes.json()).sha;
+      else if (getRes.status !== 404) { setGhStatus(ghErrorMsg(getRes.status)); setTimeout(() => setGhStatus(""), 4000); return; }
+      const putRes = await fetch(url, { method: "PUT", headers: ghHeaders, body: JSON.stringify({ message: "backup: content tracker", content, ...(sha ? { sha } : {}) }) });
+      setGhStatus(putRes.ok ? "backed up ✓" : ghErrorMsg(putRes.status));
+    } catch { setGhStatus("network error"); }
+    setTimeout(() => setGhStatus(""), 4000);
+  };
+
+  const restoreFromGitHub = async () => {
+    if (!ghPat || !ghRepo) { setShowGhSettings(true); return; }
+    setGhStatus("restoring...");
+    try {
+      const [owner, repo] = ghRepo.split("/");
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${ghPath}`, { headers: ghHeaders });
+      if (res.ok) {
+        const decoded = JSON.parse(decodeURIComponent(escape(atob((await res.json()).content))));
+        const imported = Array.isArray(decoded) ? decoded : decoded.posts;
+        if (Array.isArray(imported)) { setPosts(imported); save(imported); setGhStatus("restored ✓"); }
+        else setGhStatus("unexpected format");
+      } else { setGhStatus(res.status === 404 ? "no backup found yet" : ghErrorMsg(res.status)); }
+    } catch { setGhStatus("network error"); }
+    setTimeout(() => setGhStatus(""), 4000);
+  };
+
   const filtered = posts.filter((p) => {
     if (filterStatus !== "all" && p.status !== filterStatus) return false;
     if (filterType !== "all" && p.type !== filterType) return false;
@@ -360,6 +451,35 @@ function ContentTracker() {
           </div>
           <button onClick={addPost} style={styles.addBtn}>+ New Post</button>
         </div>
+
+        <div style={styles.backupRow}>
+          <div style={styles.backupLeft}>
+            <button onClick={exportJSON} style={styles.backupBtn}>↓ Export</button>
+            <label style={styles.backupBtn}>
+              ↑ Import
+              <input type="file" accept=".json" onChange={importJSON} style={{ display: "none" }} />
+            </label>
+          </div>
+          <div style={styles.backupRight}>
+            {ghStatus && <span style={{ fontSize: "0.7rem", color: ghStatus.includes("failed") ? "#ef4444" : ghStatus.includes("✓") ? "#4ade80" : "#c084fc" }}>{ghStatus}</span>}
+            <button onClick={restoreFromGitHub} style={styles.backupBtn} title="Restore from GitHub">↙ GH</button>
+            <button onClick={backupToGitHub} style={styles.backupBtn} title="Backup to GitHub">↑ GH</button>
+            <button onClick={() => setShowGhSettings(!showGhSettings)} style={styles.gearBtn} title="GitHub settings">⚙</button>
+          </div>
+        </div>
+
+        {showGhSettings && (
+          <div style={styles.ghPanel}>
+            <div style={{ fontSize: "0.65rem", color: "rgba(200,180,230,0.4)" }}>GitHub PAT (needs repo Contents write access)</div>
+            <input type="password" value={ghPat} onChange={(e) => setGhPat(e.target.value)} placeholder="ghp_xxxxxxxxxxxx" style={styles.ghInput} />
+            <input type="text" value={ghRepo} onChange={(e) => setGhRepo(e.target.value)} placeholder="owner/repo" style={styles.ghInput} />
+            <input type="text" value={ghPath} onChange={(e) => setGhPath(e.target.value)} placeholder="tracker-backup.json" style={styles.ghInput} />
+            <div style={{ display: "flex", gap: "0.4rem" }}>
+              <button onClick={saveGhSettings} style={styles.addBtn}>Save</button>
+              <button onClick={testGitHub} style={{ ...styles.backupBtn, padding: "0.4rem 0.75rem" }}>Test connection</button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={styles.list}>
@@ -571,6 +691,33 @@ const styles = {
     background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
     borderRadius: "6px", color: "#ef4444", padding: "0.3rem 0.6rem",
     fontSize: "0.75rem", cursor: "pointer", fontFamily: "inherit",
+  },
+  backupRow: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    gap: "0.4rem", marginTop: "0.5rem", paddingTop: "0.5rem",
+    borderTop: "1px solid rgba(255,255,255,0.05)",
+  },
+  backupLeft: { display: "flex", gap: "0.3rem" },
+  backupRight: { display: "flex", gap: "0.3rem", alignItems: "center" },
+  backupBtn: {
+    background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "6px", color: "rgba(200,180,230,0.6)", padding: "0.3rem 0.55rem",
+    fontSize: "0.75rem", cursor: "pointer", fontFamily: "inherit",
+  },
+  gearBtn: {
+    background: "none", border: "none", color: "rgba(200,180,230,0.35)",
+    fontSize: "0.9rem", cursor: "pointer", padding: "0.15rem", fontFamily: "inherit",
+  },
+  ghPanel: {
+    display: "flex", flexDirection: "column", gap: "0.35rem",
+    marginTop: "0.4rem", padding: "0.65rem",
+    background: "rgba(255,255,255,0.04)", borderRadius: "8px",
+    border: "1px solid rgba(255,255,255,0.08)",
+  },
+  ghInput: {
+    background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "8px", color: "#e8e0f0", padding: "0.4rem 0.5rem",
+    fontSize: "0.75rem", outline: "none", width: "100%", fontFamily: "inherit",
   },
 };
 
