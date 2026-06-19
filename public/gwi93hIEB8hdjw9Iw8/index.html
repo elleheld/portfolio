@@ -26,7 +26,7 @@
 <body>
     <div id="root"></div>
     <script type="text/babel">
-const { useState, useEffect, useCallback } = React;
+const { useState, useEffect, useCallback, useRef } = React;
 
 const STORAGE_KEY = "ellemarie-posts-v2";
 
@@ -209,6 +209,10 @@ function ContentTracker() {
   const [ghPath, setGhPath] = useState(() => localStorage.getItem("ellemarie-gh-path") || "tracker-backup.json");
   const [ghStatus, setGhStatus] = useState("");
   const [showGhSettings, setShowGhSettings] = useState(false);
+  const [autoInterval, setAutoInterval] = useState(() => localStorage.getItem("ellemarie-gh-interval") || "off");
+  const [ghHistory, setGhHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const lastBackupRef = useRef(null);
 
   const save = useCallback((updatedPosts) => {
     setSaveStatus("saving");
@@ -318,6 +322,7 @@ function ContentTracker() {
     localStorage.setItem("ellemarie-gh-pat", ghPat);
     localStorage.setItem("ellemarie-gh-repo", ghRepo);
     localStorage.setItem("ellemarie-gh-path", ghPath);
+    localStorage.setItem("ellemarie-gh-interval", autoInterval);
     setShowGhSettings(false);
   };
 
@@ -341,22 +346,68 @@ function ContentTracker() {
     setTimeout(() => setGhStatus(""), 4000);
   };
 
-  const backupToGitHub = async () => {
-    if (!ghPat || !ghRepo) { setShowGhSettings(true); return; }
-    setGhStatus("backing up...");
+  const pushBackup = async (currentPosts, silent = false) => {
+    if (!ghPat || !ghRepo) return false;
+    if (!silent) setGhStatus("backing up...");
     try {
       const [owner, repo] = ghRepo.split("/");
       const url = `https://api.github.com/repos/${owner}/${repo}/contents/${ghPath}`;
-      const content = btoa(unescape(encodeURIComponent(JSON.stringify({ posts, backedUpAt: new Date().toISOString() }, null, 2))));
-      let sha;
+      let sha, existingHistory = [];
       const getRes = await fetch(url, { headers: ghHeaders });
-      if (getRes.ok) sha = (await getRes.json()).sha;
-      else if (getRes.status !== 404) { setGhStatus(ghErrorMsg(getRes.status)); setTimeout(() => setGhStatus(""), 4000); return; }
+      if (getRes.ok) {
+        const fileData = await getRes.json();
+        sha = fileData.sha;
+        const existing = JSON.parse(decodeURIComponent(escape(atob(fileData.content))));
+        if (existing.history) existingHistory = existing.history;
+        else if (existing.posts) existingHistory = [{ posts: existing.posts, backedUpAt: existing.backedUpAt }];
+      } else if (getRes.status !== 404) {
+        if (!silent) { setGhStatus(ghErrorMsg(getRes.status)); setTimeout(() => setGhStatus(""), 4000); }
+        return false;
+      }
+      const now = new Date().toISOString();
+      const newHistory = [
+        { posts: currentPosts, backedUpAt: now, label: now },
+        ...existingHistory,
+      ].slice(0, 10);
+      const payload = { posts: currentPosts, backedUpAt: now, history: newHistory };
+      const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
       const putRes = await fetch(url, { method: "PUT", headers: ghHeaders, body: JSON.stringify({ message: "backup: content tracker", content, ...(sha ? { sha } : {}) }) });
-      setGhStatus(putRes.ok ? "backed up ✓" : ghErrorMsg(putRes.status));
-    } catch { setGhStatus("network error"); }
-    setTimeout(() => setGhStatus(""), 4000);
+      if (putRes.ok) {
+        lastBackupRef.current = JSON.stringify(currentPosts);
+        if (!silent) setGhStatus("backed up ✓");
+        else setGhStatus("auto-backed up ✓");
+        setTimeout(() => setGhStatus(""), 3000);
+        return true;
+      } else {
+        if (!silent) { setGhStatus(ghErrorMsg(putRes.status)); setTimeout(() => setGhStatus(""), 4000); }
+        return false;
+      }
+    } catch {
+      if (!silent) { setGhStatus("network error"); setTimeout(() => setGhStatus(""), 4000); }
+      return false;
+    }
   };
+
+  const backupToGitHub = () => pushBackup(posts, false);
+
+  const autoBackup = useCallback(async (currentPosts) => {
+    if (!ghPat || !ghRepo) return;
+    if (lastBackupRef.current === JSON.stringify(currentPosts)) return;
+    await pushBackup(currentPosts, true);
+  }, [ghPat, ghRepo, ghPath]);
+
+  useEffect(() => {
+    if (autoInterval !== "on" || !ghPat || !ghRepo) return;
+    const id = setInterval(() => autoBackup(posts), 120 * 1000);
+    return () => clearInterval(id);
+  }, [autoInterval, posts, autoBackup]);
+
+  useEffect(() => {
+    if (!ghPat || !ghRepo) return;
+    const onHide = () => { if (document.visibilityState === "hidden") autoBackup(posts); };
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, [posts, autoBackup, ghPat, ghRepo]);
 
   const restoreFromGitHub = async () => {
     if (!ghPat || !ghRepo) { setShowGhSettings(true); return; }
@@ -366,12 +417,34 @@ function ContentTracker() {
       const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${ghPath}`, { headers: ghHeaders });
       if (res.ok) {
         const decoded = JSON.parse(decodeURIComponent(escape(atob((await res.json()).content))));
-        const imported = Array.isArray(decoded) ? decoded : decoded.posts;
-        if (Array.isArray(imported)) { setPosts(imported); save(imported); setGhStatus("restored ✓"); }
+        const imported = decoded.posts;
+        if (Array.isArray(imported)) { setPosts(imported); save(imported); lastBackupRef.current = JSON.stringify(imported); setGhStatus("restored ✓"); }
         else setGhStatus("unexpected format");
       } else { setGhStatus(res.status === 404 ? "no backup found yet" : ghErrorMsg(res.status)); }
     } catch { setGhStatus("network error"); }
     setTimeout(() => setGhStatus(""), 4000);
+  };
+
+  const loadHistory = async () => {
+    if (!ghPat || !ghRepo) return;
+    setLoadingHistory(true);
+    try {
+      const [owner, repo] = ghRepo.split("/");
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${ghPath}`, { headers: ghHeaders });
+      if (res.ok) {
+        const decoded = JSON.parse(decodeURIComponent(escape(atob((await res.json()).content))));
+        setGhHistory(decoded.history || []);
+      }
+    } catch {}
+    setLoadingHistory(false);
+  };
+
+  const restoreSnapshot = (snapshot) => {
+    if (!Array.isArray(snapshot.posts)) return;
+    setPosts(snapshot.posts);
+    save(snapshot.posts);
+    setGhStatus("restored ✓");
+    setTimeout(() => setGhStatus(""), 3000);
   };
 
   const filtered = posts.filter((p) => {
@@ -474,9 +547,36 @@ function ContentTracker() {
             <input type="password" value={ghPat} onChange={(e) => setGhPat(e.target.value)} placeholder="ghp_xxxxxxxxxxxx" style={styles.ghInput} />
             <input type="text" value={ghRepo} onChange={(e) => setGhRepo(e.target.value)} placeholder="owner/repo" style={styles.ghInput} />
             <input type="text" value={ghPath} onChange={(e) => setGhPath(e.target.value)} placeholder="tracker-backup.json" style={styles.ghInput} />
+            <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+              <span style={{ fontSize: "0.65rem", color: "rgba(200,180,230,0.4)", whiteSpace: "nowrap" }}>Auto-backup</span>
+              <select value={autoInterval} onChange={(e) => setAutoInterval(e.target.value)} style={{ ...styles.ghInput, flex: 1 }}>
+                <option value="off">Off</option>
+                <option value="on">On (every 2 min)</option>
+              </select>
+            </div>
             <div style={{ display: "flex", gap: "0.4rem" }}>
               <button onClick={saveGhSettings} style={styles.addBtn}>Save</button>
               <button onClick={testGitHub} style={{ ...styles.backupBtn, padding: "0.4rem 0.75rem" }}>Test connection</button>
+            </div>
+
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "0.5rem", marginTop: "0.1rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                <span style={{ fontSize: "0.65rem", color: "rgba(200,180,230,0.4)" }}>Backup history (last 10)</span>
+                <button onClick={loadHistory} style={{ ...styles.backupBtn, fontSize: "0.65rem", padding: "0.2rem 0.45rem" }}>
+                  {loadingHistory ? "loading..." : "Load"}
+                </button>
+              </div>
+              {ghHistory.length > 0 && ghHistory.map((snap, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.3rem 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <span style={{ fontSize: "0.7rem", color: "rgba(200,180,230,0.6)" }}>
+                    {new Date(snap.backedUpAt).toLocaleString()} — {snap.posts?.length ?? "?"} posts
+                  </span>
+                  <button onClick={() => restoreSnapshot(snap)} style={{ ...styles.backupBtn, fontSize: "0.65rem", padding: "0.15rem 0.4rem" }}>Restore</button>
+                </div>
+              ))}
+              {ghHistory.length === 0 && !loadingHistory && (
+                <div style={{ fontSize: "0.65rem", color: "rgba(200,180,230,0.25)" }}>No history loaded yet</div>
+              )}
             </div>
           </div>
         )}
