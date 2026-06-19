@@ -323,6 +323,24 @@ function ContentTracker() {
 
   const ghHeaders = { Authorization: `token ${ghPat}`, Accept: "application/vnd.github.v3+json", "Content-Type": "application/json" };
 
+  const ghErrorMsg = (status) => {
+    if (status === 401) return "bad token — check your PAT";
+    if (status === 403) return "no permission — token needs Contents write";
+    if (status === 404) return "repo not found — check owner/repo";
+    return `failed (${status})`;
+  };
+
+  const testGitHub = async () => {
+    if (!ghPat || !ghRepo) return;
+    setGhStatus("testing...");
+    try {
+      const [owner, repo] = ghRepo.split("/");
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers: ghHeaders });
+      setGhStatus(res.ok ? "token works ✓" : ghErrorMsg(res.status));
+    } catch { setGhStatus("network error"); }
+    setTimeout(() => setGhStatus(""), 4000);
+  };
+
   const backupToGitHub = async () => {
     if (!ghPat || !ghRepo) { setShowGhSettings(true); return; }
     setGhStatus("backing up...");
@@ -333,10 +351,11 @@ function ContentTracker() {
       let sha;
       const getRes = await fetch(url, { headers: ghHeaders });
       if (getRes.ok) sha = (await getRes.json()).sha;
+      else if (getRes.status !== 404) { setGhStatus(ghErrorMsg(getRes.status)); setTimeout(() => setGhStatus(""), 4000); return; }
       const putRes = await fetch(url, { method: "PUT", headers: ghHeaders, body: JSON.stringify({ message: "backup: content tracker", content, ...(sha ? { sha } : {}) }) });
-      setGhStatus(putRes.ok ? "backed up ✓" : "backup failed");
-    } catch { setGhStatus("backup failed"); }
-    setTimeout(() => setGhStatus(""), 3000);
+      setGhStatus(putRes.ok ? "backed up ✓" : ghErrorMsg(putRes.status));
+    } catch { setGhStatus("network error"); }
+    setTimeout(() => setGhStatus(""), 4000);
   };
 
   const restoreFromGitHub = async () => {
@@ -349,10 +368,10 @@ function ContentTracker() {
         const decoded = JSON.parse(decodeURIComponent(escape(atob((await res.json()).content))));
         const imported = Array.isArray(decoded) ? decoded : decoded.posts;
         if (Array.isArray(imported)) { setPosts(imported); save(imported); setGhStatus("restored ✓"); }
-        else setGhStatus("restore failed");
-      } else setGhStatus("restore failed");
-    } catch { setGhStatus("restore failed"); }
-    setTimeout(() => setGhStatus(""), 3000);
+        else setGhStatus("unexpected format");
+      } else { setGhStatus(res.status === 404 ? "no backup found yet" : ghErrorMsg(res.status)); }
+    } catch { setGhStatus("network error"); }
+    setTimeout(() => setGhStatus(""), 4000);
   };
 
   const filtered = posts.filter((p) => {
@@ -455,7 +474,10 @@ function ContentTracker() {
             <input type="password" value={ghPat} onChange={(e) => setGhPat(e.target.value)} placeholder="ghp_xxxxxxxxxxxx" style={styles.ghInput} />
             <input type="text" value={ghRepo} onChange={(e) => setGhRepo(e.target.value)} placeholder="owner/repo" style={styles.ghInput} />
             <input type="text" value={ghPath} onChange={(e) => setGhPath(e.target.value)} placeholder="tracker-backup.json" style={styles.ghInput} />
-            <button onClick={saveGhSettings} style={styles.addBtn}>Save</button>
+            <div style={{ display: "flex", gap: "0.4rem" }}>
+              <button onClick={saveGhSettings} style={styles.addBtn}>Save</button>
+              <button onClick={testGitHub} style={{ ...styles.backupBtn, padding: "0.4rem 0.75rem" }}>Test connection</button>
+            </div>
           </div>
         )}
       </div>
