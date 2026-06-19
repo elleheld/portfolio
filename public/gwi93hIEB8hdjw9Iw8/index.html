@@ -201,6 +201,7 @@ function ContentTracker() {
   const [expandedId, setExpandedId] = useState(null);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
+  const [filterPlatform, setFilterPlatform] = useState("all");
   const [saveStatus, setSaveStatus] = useState("");
   const [adding, setAdding] = useState(false);
 
@@ -285,6 +286,7 @@ function ContentTracker() {
   const filtered = posts.filter((p) => {
     if (filterStatus !== "all" && p.status !== filterStatus) return false;
     if (filterType !== "all" && p.type !== filterType) return false;
+    if (filterPlatform !== "all" && !p.platforms[filterPlatform]) return false;
     return true;
   });
 
@@ -330,7 +332,15 @@ function ContentTracker() {
 
         <div style={styles.statsRow}>
           {Object.entries(PLATFORM_INFO).map(([key, info]) => (
-            <div key={key} style={{ ...styles.statChip, background: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.08)" }}>
+            <div
+              key={key}
+              onClick={() => setFilterPlatform(filterPlatform === key ? "all" : key)}
+              style={{
+                ...styles.statChip,
+                background: filterPlatform === key ? info.color + "22" : "rgba(255,255,255,0.04)",
+                borderColor: filterPlatform === key ? info.color : "rgba(255,255,255,0.08)",
+              }}
+            >
               <span style={{ color: info.color, fontWeight: 700, fontSize: "1rem" }}>{platformCounts[key] || 0}</span>
               <span style={{ color: "rgba(200,180,230,0.6)", fontSize: "0.65rem" }}>{info.label}</span>
             </div>
@@ -344,8 +354,8 @@ function ContentTracker() {
               <option value="short">Shorts / Reels</option>
               <option value="static">Static / Photos</option>
             </select>
-            {(filterStatus !== "all" || filterType !== "all") && (
-              <button onClick={() => { setFilterStatus("all"); setFilterType("all"); }} style={styles.clearBtn}>Clear filters</button>
+            {(filterStatus !== "all" || filterType !== "all" || filterPlatform !== "all") && (
+              <button onClick={() => { setFilterStatus("all"); setFilterType("all"); setFilterPlatform("all"); }} style={styles.clearBtn}>Clear filters</button>
             )}
           </div>
           <button onClick={addPost} style={styles.addBtn}>+ New Post</button>
