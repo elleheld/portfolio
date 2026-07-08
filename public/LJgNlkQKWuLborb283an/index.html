@@ -5,13 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Time Tracker</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="stylesheet" href="style.css?v=3" />
+<link rel="stylesheet" href="style.css?v=4" />
 </head>
 <body>
   <div class="app">
     <header class="app-header">
-      <h1>⏱ Time Tracker</h1>
-      <p class="subtitle">Company, ticket, and what you did — timed or backfilled.</p>
+      <div class="header-top">
+        <div>
+          <h1>⏱ Time Tracker</h1>
+          <p class="subtitle">Company, ticket, and what you did — timed or backfilled.</p>
+        </div>
+        <a class="btn btn-ghost btn-small" href="dashboard.html">Live Dashboard →</a>
+      </div>
+      <div class="who-row">
+        <label for="who-input">Tracking as</label>
+        <input type="text" id="who-input" list="people-list" placeholder="Your name" autocomplete="off" />
+        <datalist id="people-list"></datalist>
+        <span id="sync-status" class="sync-status"></span>
+      </div>
     </header>
 
     <div id="bolt-section" class="bolt-section">
@@ -54,6 +65,8 @@
 
   <div id="viz-tooltip" class="viz-tooltip" hidden></div>
 
-  <script src="app.js?v=3"></script>
+  <script src="config.js?v=1"></script>
+  <script src="sync.js?v=1"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

@@ -17,6 +17,8 @@ window.addEventListener("error", (e) => {
   const COMPANIES_KEY = "timeTracker.companies.v2";
   const LAST_STOPPED_KEY = "timeTracker.lastStopped.v2";
   const LEGACY_ENTRIES_KEY = "timeTracker.entries";
+  const WHO_KEY = "timeTracker.who";
+  const PEOPLE_CACHE_KEY = "timeTracker.people";
 
   const GAP_THRESHOLD_MS = 60 * 1000;
 
@@ -46,25 +48,17 @@ window.addEventListener("error", (e) => {
   const timeModalSave = document.getElementById("time-modal-save");
 
   const tooltipEl = document.getElementById("viz-tooltip");
+  const whoInput = document.getElementById("who-input");
+  const peopleListEl = document.getElementById("people-list");
+  const syncStatusEl = document.getElementById("sync-status");
 
-  let entries = loadJson(ENTRIES_KEY, null);
-  let sessions = loadJson(SESSIONS_KEY, []);
-  let companies = loadJson(COMPANIES_KEY, []);
-  let activeTimer = loadJson(ACTIVE_KEY, null);
-  let lastStopped = loadJson(LAST_STOPPED_KEY, null);
-
-  if (entries === null) {
-    entries = migrateLegacyEntries();
-    saveEntries();
-  }
-
-  if (companies.length === 0 && entries.length > 0) {
-    companies = [...new Set(entries.map((e) => e.company).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-    saveCompanies();
-  }
+  let who = (localStorage.getItem(WHO_KEY) || "").trim();
+  let entries, sessions, companies, activeTimer, lastStopped;
+  let knownPeople = loadJson(PEOPLE_CACHE_KEY, []);
 
   let weekStart = mondayOf(todayStr());
   let tickHandle = null;
+  let syncPushTimer = null;
   const draftByDate = {};
   const companyColorMap = new Map();
   let modalContext = null; // { type: 'entry', id } | { type: 'draft', date }
@@ -80,32 +74,44 @@ window.addEventListener("error", (e) => {
     }
   }
 
+  function keyForWho(base, w) {
+    return w ? `${base}::${w.toLowerCase()}` : base;
+  }
+
+  function keyFor(base) {
+    return keyForWho(base, who);
+  }
+
   function saveEntries() {
-    localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries));
+    localStorage.setItem(keyFor(ENTRIES_KEY), JSON.stringify(entries));
+    scheduleSyncPush();
   }
 
   function saveSessions() {
-    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+    localStorage.setItem(keyFor(SESSIONS_KEY), JSON.stringify(sessions));
+    scheduleSyncPush();
   }
 
   function saveCompanies() {
-    localStorage.setItem(COMPANIES_KEY, JSON.stringify(companies));
+    localStorage.setItem(keyFor(COMPANIES_KEY), JSON.stringify(companies));
+    scheduleSyncPush();
   }
 
   function saveActive() {
     if (activeTimer) {
-      localStorage.setItem(ACTIVE_KEY, JSON.stringify(activeTimer));
+      localStorage.setItem(keyFor(ACTIVE_KEY), JSON.stringify(activeTimer));
     } else {
-      localStorage.removeItem(ACTIVE_KEY);
+      localStorage.removeItem(keyFor(ACTIVE_KEY));
     }
   }
 
   function saveLastStopped() {
     if (lastStopped) {
-      localStorage.setItem(LAST_STOPPED_KEY, JSON.stringify(lastStopped));
+      localStorage.setItem(keyFor(LAST_STOPPED_KEY), JSON.stringify(lastStopped));
     } else {
-      localStorage.removeItem(LAST_STOPPED_KEY);
+      localStorage.removeItem(keyFor(LAST_STOPPED_KEY));
     }
+    scheduleSyncPush();
   }
 
   function migrateLegacyEntries() {
@@ -122,6 +128,130 @@ window.addEventListener("error", (e) => {
       carried: true,
     }));
   }
+
+  // the very first time a named identity is used on this browser, adopt
+  // whatever anonymous/base-bucket data already exists here so nothing
+  // already logged is lost.
+  function migrateBaseToWhoIfNeeded(newWho) {
+    if (!newWho) return;
+    if (localStorage.getItem(keyForWho(ENTRIES_KEY, newWho)) !== null) return;
+    if (localStorage.getItem(ENTRIES_KEY) === null) return;
+    [ENTRIES_KEY, SESSIONS_KEY, COMPANIES_KEY, ACTIVE_KEY, LAST_STOPPED_KEY].forEach((base) => {
+      const raw = localStorage.getItem(base);
+      if (raw !== null) localStorage.setItem(keyForWho(base, newWho), raw);
+    });
+  }
+
+  function loadStateForWho() {
+    entries = loadJson(keyFor(ENTRIES_KEY), null);
+    sessions = loadJson(keyFor(SESSIONS_KEY), []);
+    companies = loadJson(keyFor(COMPANIES_KEY), []);
+    activeTimer = loadJson(keyFor(ACTIVE_KEY), null);
+    lastStopped = loadJson(keyFor(LAST_STOPPED_KEY), null);
+
+    if (entries === null) {
+      entries = who ? [] : migrateLegacyEntries();
+      saveEntries();
+    }
+
+    if (companies.length === 0 && entries.length > 0) {
+      companies = [...new Set(entries.map((e) => e.company).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+      saveCompanies();
+    }
+  }
+
+  // ---------- identity (who) + sync ----------
+
+  function setSyncStatus(text) {
+    syncStatusEl.textContent = text;
+  }
+
+  function renderPeopleList() {
+    peopleListEl.innerHTML = knownPeople.map((p) => `<option value="${escapeHtml(p)}"></option>`).join("");
+  }
+
+  function registerPerson(name) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (!knownPeople.some((p) => p.toLowerCase() === trimmed.toLowerCase())) {
+      knownPeople.push(trimmed);
+      knownPeople.sort((a, b) => a.localeCompare(b));
+      localStorage.setItem(PEOPLE_CACHE_KEY, JSON.stringify(knownPeople));
+      renderPeopleList();
+    }
+    if (window.TTSync && TTSync.enabled()) TTSync.addPerson(trimmed);
+  }
+
+  async function refreshRemotePeople() {
+    if (!window.TTSync || !TTSync.enabled()) return;
+    const remote = await TTSync.getPeople();
+    if (remote) {
+      knownPeople = remote;
+      localStorage.setItem(PEOPLE_CACHE_KEY, JSON.stringify(knownPeople));
+      renderPeopleList();
+    }
+  }
+
+  function scheduleSyncPush() {
+    if (!who || !window.TTSync || !TTSync.enabled()) return;
+    setSyncStatus("Syncing…");
+    clearTimeout(syncPushTimer);
+    syncPushTimer = setTimeout(async () => {
+      const ok = await TTSync.putUserData(who, { entries, sessions, companies, lastStopped });
+      setSyncStatus(ok ? "Synced" : "Offline (saved locally)");
+    }, 800);
+  }
+
+  async function syncPullAndReconcile() {
+    if (!window.TTSync || !TTSync.enabled()) {
+      setSyncStatus("Local only");
+      return;
+    }
+    if (!who) {
+      setSyncStatus("");
+      return;
+    }
+    setSyncStatus("Syncing…");
+    const remote = await TTSync.getUserData(who);
+    if (remote) {
+      entries = remote.entries || [];
+      sessions = remote.sessions || [];
+      companies = remote.companies || [];
+      lastStopped = remote.lastStopped || null;
+      saveEntries();
+      saveSessions();
+      saveCompanies();
+      saveLastStopped();
+      materializeCarryOvers();
+      renderCompanyList();
+      renderAll();
+      setSyncStatus("Synced");
+    } else {
+      setSyncStatus("Offline (using local copy)");
+    }
+  }
+
+  function switchWho(newWho) {
+    const trimmed = newWho.trim();
+    if (trimmed === who) return;
+    stopTicking();
+    migrateBaseToWhoIfNeeded(trimmed);
+    who = trimmed;
+    localStorage.setItem(WHO_KEY, who);
+    loadStateForWho();
+    materializeCarryOvers();
+    renderCompanyList();
+    renderAll();
+    if (activeTimer) startTicking();
+    syncPullAndReconcile();
+  }
+
+  whoInput.addEventListener("change", () => {
+    const val = whoInput.value.trim();
+    if (!val || val === who) return;
+    switchWho(val);
+    registerPerson(val);
+  });
 
   // ---------- date helpers ----------
 
@@ -280,8 +410,18 @@ window.addEventListener("error", (e) => {
 
   function startTimerOn(entryId, startIso) {
     if (activeTimer) stopActiveTimer();
+    const entry = getEntry(entryId);
+    if (!entry) return;
     activeTimer = { entryId, start: startIso || new Date().toISOString() };
     saveActive();
+    if (who && window.TTSync && TTSync.enabled()) {
+      TTSync.setActive(who, {
+        company: entry.company,
+        ticket: entry.ticket,
+        description: entry.description,
+        start: activeTimer.start,
+      });
+    }
     startTicking();
     renderAll();
   }
@@ -312,6 +452,7 @@ window.addEventListener("error", (e) => {
     }
     activeTimer = null;
     saveActive();
+    if (who && window.TTSync && TTSync.enabled()) TTSync.clearActive(who);
     stopTicking();
   }
 
@@ -369,6 +510,7 @@ window.addEventListener("error", (e) => {
     if (activeTimer && activeTimer.entryId === id) {
       activeTimer = null;
       saveActive();
+      if (who && window.TTSync && TTSync.enabled()) TTSync.clearActive(who);
       stopTicking();
     }
     saveEntries();
@@ -1003,8 +1145,19 @@ window.addEventListener("error", (e) => {
 
   // ---------- init ----------
 
+  whoInput.value = who;
+  loadStateForWho();
+  renderPeopleList();
   materializeCarryOvers();
   renderCompanyList();
   renderAll();
   if (activeTimer) startTicking();
+  if (!window.TTSync || !TTSync.enabled()) {
+    setSyncStatus("Local only");
+  } else if (!who) {
+    setSyncStatus("Set your name to sync");
+  } else {
+    syncPullAndReconcile();
+  }
+  refreshRemotePeople();
 })();

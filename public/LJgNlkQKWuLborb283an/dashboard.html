@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Live Dashboard — Time Tracker</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="style.css?v=4" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <div class="header-top">
+        <div>
+          <h1>&#9889; Live Dashboard</h1>
+          <p class="subtitle">Who's tracking time right now.</p>
+        </div>
+        <a class="btn btn-ghost btn-small" href="index.html">&larr; Back to tracker</a>
+      </div>
+    </header>
+
+    <div id="dash-status" class="sync-status" style="margin-bottom: 16px;"></div>
+
+    <div id="dash-list" class="days"></div>
+  </div>
+
+  <script src="config.js?v=1"></script>
+  <script src="sync.js?v=1"></script>
+  <script src="dashboard.js?v=1"></script>
+</body>
+</html>
