@@ -78,7 +78,8 @@ window.addEventListener("error", (e) => {
   let syncPushTimer = null;
   const draftByDate = {};
   const companyColorMap = new Map();
-  let modalContext = null; // { type: 'entry', id } | { type: 'draft', date }
+  const expandedEntries = new Set();
+  let modalContext = null; // { type: 'entry', id } | { type: 'draft', date } | { type: 'session', id }
 
   // ---------- storage helpers ----------
 
@@ -624,14 +625,18 @@ window.addEventListener("error", (e) => {
     renderAll();
   }
 
+  function recomputeEntryTotal(entry) {
+    entry.totalMs = sessions
+      .filter((s) => s.entryId === entry.id)
+      .reduce((sum, s) => sum + Math.max(0, new Date(s.end) - new Date(s.start)), 0);
+  }
+
   function stopActiveTimer() {
     if (!activeTimer) return;
     const entry = getEntry(activeTimer.entryId);
     const start = activeTimer.start;
     const end = new Date().toISOString();
     if (entry) {
-      const ms = Math.max(0, new Date(end) - new Date(start));
-      entry.totalMs += ms;
       sessions.push({
         id: uid(),
         entryId: entry.id,
@@ -643,6 +648,7 @@ window.addEventListener("error", (e) => {
         end,
         type: "timer",
       });
+      recomputeEntryTotal(entry);
       saveEntries();
       saveSessions();
       lastStopped = { entryId: entry.id, end };
@@ -668,7 +674,6 @@ window.addEventListener("error", (e) => {
     const ms = minutes * 60 * 1000;
     const end = new Date();
     const start = new Date(end.getTime() - ms);
-    entry.totalMs += ms;
     sessions.push({
       id: uid(),
       entryId: entry.id,
@@ -680,6 +685,7 @@ window.addEventListener("error", (e) => {
       end: end.toISOString(),
       type: "manual",
     });
+    recomputeEntryTotal(entry);
     saveEntries();
     saveSessions();
     renderAll();
@@ -693,7 +699,6 @@ window.addEventListener("error", (e) => {
       alert("End time must be after start time.");
       return;
     }
-    entry.totalMs += ms;
     sessions.push({
       id: uid(),
       entryId: entry.id,
@@ -705,9 +710,38 @@ window.addEventListener("error", (e) => {
       end: endIso,
       type: "range",
     });
+    recomputeEntryTotal(entry);
     saveEntries();
     saveSessions();
     renderAll();
+  }
+
+  function deleteSession(sessionId) {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (!session) return;
+    sessions = sessions.filter((s) => s.id !== sessionId);
+    const entry = getEntry(session.entryId);
+    if (entry) recomputeEntryTotal(entry);
+    saveEntries();
+    saveSessions();
+    renderAll();
+  }
+
+  function updateSessionTimes(sessionId, startIso, endIso) {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (!session) return false;
+    if (!(new Date(endIso) - new Date(startIso) > 0)) {
+      alert("End time must be after start time.");
+      return false;
+    }
+    session.start = startIso;
+    session.end = endIso;
+    const entry = getEntry(session.entryId);
+    if (entry) recomputeEntryTotal(entry);
+    saveEntries();
+    saveSessions();
+    renderAll();
+    return true;
   }
 
   function deleteEntry(id) {
@@ -747,6 +781,17 @@ window.addEventListener("error", (e) => {
 
   function openTimeModal(context) {
     modalContext = context;
+
+    if (context.type === "session") {
+      const session = sessions.find((s) => s.id === context.id);
+      if (!session) return;
+      timeModalStart.value = isoToTimeInput(session.start);
+      timeModalEnd.value = isoToTimeInput(session.end);
+      timeModalBackdrop.hidden = false;
+      timeModalStart.focus();
+      return;
+    }
+
     const now = new Date();
     const defaultEnd = isoToTimeInput(now.toISOString());
     let defaultStart;
@@ -770,6 +815,10 @@ window.addEventListener("error", (e) => {
       const entry = getEntry(context.id);
       return entry ? entry.date : todayStr();
     }
+    if (context.type === "session") {
+      const session = sessions.find((s) => s.id === context.id);
+      return session ? session.date : todayStr();
+    }
     return context.date;
   }
 
@@ -789,6 +838,13 @@ window.addEventListener("error", (e) => {
     if (!timeModalStart.value || !timeModalEnd.value) return;
     const startIso = timeInputToIso(date, timeModalStart.value);
     const endIso = timeInputToIso(date, timeModalEnd.value);
+
+    if (modalContext.type === "session") {
+      const sessionId = modalContext.id;
+      closeTimeModal();
+      updateSessionTimes(sessionId, startIso, endIso);
+      return;
+    }
 
     let entryId;
     if (modalContext.type === "entry") {
@@ -977,6 +1033,9 @@ window.addEventListener("error", (e) => {
 
     for (const entry of ticketEntries) {
       tbody.appendChild(renderEntryRow(entry));
+      if (expandedEntries.has(entry.id)) {
+        tbody.appendChild(renderSessionDetailRow(entry));
+      }
     }
 
     if (isToday) {
@@ -999,6 +1058,8 @@ window.addEventListener("error", (e) => {
 
   function renderWrapSection(entry) {
     const isRunning = activeTimer && activeTimer.entryId === entry.id;
+    const outer = document.createElement("div");
+
     const div = document.createElement("div");
     div.className = "wrap-section" + (isRunning ? " row-running" : "");
 
@@ -1012,7 +1073,10 @@ window.addEventListener("error", (e) => {
         <button class="btn btn-ghost btn-small" data-addcustom>+Custom</button>
         <button class="btn btn-ghost btn-small" data-times title="Set a custom start and end time">Times</button>
       </div>
-      <span class="wrap-time mono" data-time-for="${entry.id}">${formatDuration(entry.totalMs)}</span>
+      <button class="time-toggle mono" data-toggle-sessions="${entry.id}" title="Show individual sessions">
+        <span class="time-chevron">${expandedEntries.has(entry.id) ? "▾" : "▸"}</span>
+        <span data-time-for="${entry.id}">${formatDuration(entry.totalMs)}</span>
+      </button>
     `;
 
     div.querySelector(`[data-field]`).addEventListener("change", (e) => {
@@ -1044,7 +1108,21 @@ window.addEventListener("error", (e) => {
       openTimeModal({ type: "entry", id: entry.id });
     });
 
-    return div;
+    div.querySelector(`[data-toggle-sessions]`).addEventListener("click", () => {
+      if (expandedEntries.has(entry.id)) expandedEntries.delete(entry.id);
+      else expandedEntries.add(entry.id);
+      renderAll();
+    });
+
+    outer.appendChild(div);
+    if (expandedEntries.has(entry.id)) {
+      const detail = document.createElement("div");
+      detail.className = "session-list-outer";
+      detail.appendChild(renderSessionList(entry));
+      outer.appendChild(detail);
+    }
+
+    return outer;
   }
 
   function renderEntryRow(entry) {
@@ -1067,7 +1145,12 @@ window.addEventListener("error", (e) => {
           <button class="btn btn-ghost btn-small" data-times="${entry.id}" title="Set a custom start and end time">Times</button>
         </div>
       </td>
-      <td class="col-time mono" data-time-for="${entry.id}">${formatDuration(entry.totalMs)}</td>
+      <td class="col-time">
+        <button class="time-toggle mono" data-toggle-sessions="${entry.id}" title="Show individual sessions">
+          <span class="time-chevron">${expandedEntries.has(entry.id) ? "▾" : "▸"}</span>
+          <span data-time-for="${entry.id}">${formatDuration(entry.totalMs)}</span>
+        </button>
+      </td>
       <td><button class="btn-icon" data-delete="${entry.id}" title="Delete row">&#10005;</button></td>
     `;
 
@@ -1124,7 +1207,65 @@ window.addEventListener("error", (e) => {
       deleteEntry(entry.id);
     });
 
+    tr.querySelector(`[data-toggle-sessions]`).addEventListener("click", () => {
+      if (expandedEntries.has(entry.id)) expandedEntries.delete(entry.id);
+      else expandedEntries.add(entry.id);
+      renderAll();
+    });
+
     return tr;
+  }
+
+  function renderSessionDetailRow(entry) {
+    const tr = document.createElement("tr");
+    tr.className = "session-detail-row";
+    const td = document.createElement("td");
+    td.colSpan = 7;
+    td.appendChild(renderSessionList(entry));
+    tr.appendChild(td);
+    return tr;
+  }
+
+  function renderSessionList(entry) {
+    const wrap = document.createElement("div");
+    wrap.className = "session-list";
+
+    const entrySessions = sessions.filter((s) => s.entryId === entry.id).sort((a, b) => new Date(a.start) - new Date(b.start));
+
+    if (entrySessions.length === 0) {
+      wrap.innerHTML = `<div class="session-empty">No individual sessions yet — use Start, +5m, or Times above.</div>`;
+      return wrap;
+    }
+
+    entrySessions.forEach((session) => {
+      const row = document.createElement("div");
+      row.className = "session-row";
+      row.innerHTML = `
+        <input type="time" class="session-time-input" step="60" value="${isoToTimeInput(session.start)}" data-session-start="${session.id}" />
+        <span class="session-sep">–</span>
+        <input type="time" class="session-time-input" step="60" value="${isoToTimeInput(session.end)}" data-session-end="${session.id}" />
+        <span class="session-duration mono">${formatDuration(new Date(session.end) - new Date(session.start))}</span>
+        <span class="session-type">${typeLabel(session.type)}</span>
+        <button class="btn-icon" data-session-delete="${session.id}" title="Delete session">&#10005;</button>
+      `;
+
+      const applyChange = () => {
+        const startVal = row.querySelector(`[data-session-start]`).value;
+        const endVal = row.querySelector(`[data-session-end]`).value;
+        if (!startVal || !endVal) return;
+        const startIso = timeInputToIso(session.date, startVal);
+        const endIso = timeInputToIso(session.date, endVal);
+        updateSessionTimes(session.id, startIso, endIso);
+      };
+
+      row.querySelector(`[data-session-start]`).addEventListener("change", applyChange);
+      row.querySelector(`[data-session-end]`).addEventListener("change", applyChange);
+      row.querySelector(`[data-session-delete]`).addEventListener("click", () => deleteSession(session.id));
+
+      wrap.appendChild(row);
+    });
+
+    return wrap;
   }
 
   function renderDraftRow(date) {
