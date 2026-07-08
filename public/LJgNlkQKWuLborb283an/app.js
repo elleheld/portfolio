@@ -1,3 +1,13 @@
+window.addEventListener("error", (e) => {
+  const days = document.getElementById("days");
+  if (days) {
+    days.innerHTML = `<div style="color:#ff6b7a;padding:16px;border:1px solid #ff6b7a;border-radius:8px;">
+      Something broke: ${String(e.message || e.error).replace(/</g, "&lt;")}.<br>
+      Try a hard refresh (Ctrl/Cmd+Shift+R) to clear a stale cached copy of this page.
+    </div>`;
+  }
+});
+
 (function () {
   "use strict";
 
