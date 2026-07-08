@@ -60,5 +60,9 @@ window.TTSync = (function () {
       reqStatus(`/api/auth/${encodeURIComponent(who)}`, { method: "POST", body: JSON.stringify({ action: "register", salt, hash }) }),
     verifyAuth: (who, hash) =>
       reqStatus(`/api/auth/${encodeURIComponent(who)}`, { method: "POST", body: JSON.stringify({ action: "verify", hash }) }),
+    changePassword: (who, oldHash, newSalt, newHash) =>
+      reqStatus(`/api/auth/${encodeURIComponent(who)}`, { method: "POST", body: JSON.stringify({ action: "change", oldHash, newSalt, newHash }) }),
+    renameIdentity: (who, newName, hash) =>
+      reqStatus(`/api/auth/${encodeURIComponent(who)}`, { method: "POST", body: JSON.stringify({ action: "rename", newName, hash }) }),
   };
 })();

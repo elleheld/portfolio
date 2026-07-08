@@ -16,15 +16,16 @@ window.addEventListener("error", (e) => {
   const ACTIVE_KEY = "timeTracker.active.v2";
   const COMPANIES_KEY = "timeTracker.companies.v2";
   const LAST_STOPPED_KEY = "timeTracker.lastStopped.v2";
+  const PROFILE_KEY = "timeTracker.profile.v2";
   const LEGACY_ENTRIES_KEY = "timeTracker.entries";
   const WHO_KEY = "timeTracker.who";
   const PEOPLE_CACHE_KEY = "timeTracker.people";
 
   const GAP_THRESHOLD_MS = 60 * 1000;
-  const TIMELINE_ROUND_MS = 15 * 60 * 1000;
-  const TIMELINE_MIN_WINDOW_MS = 60 * 60 * 1000;
   const WRAP_COMPANY = "Wrap";
   const PBKDF2_ITERATIONS = 100000;
+  const AVATAR_SIZE = 96;
+  const DEFAULT_PROFILE = { workingHoursStart: "08:00", workingHoursEnd: "17:00", avatar: null };
 
   // dataviz categorical palette (dark-mode steps), red reserved for the
   // "missing time" status so it never doubles as a company color.
@@ -52,8 +53,6 @@ window.addEventListener("error", (e) => {
   const timeModalSave = document.getElementById("time-modal-save");
 
   const tooltipEl = document.getElementById("viz-tooltip");
-  const whoDisplay = document.getElementById("who-display");
-  const switchWhoBtn = document.getElementById("switch-who-btn");
   const peopleListEl = document.getElementById("people-list");
   const syncStatusEl = document.getElementById("sync-status");
 
@@ -69,8 +68,33 @@ window.addEventListener("error", (e) => {
   const gatePasswordError = document.getElementById("gate-password-error");
   const gateBackBtn = document.getElementById("gate-back-btn");
 
+  const profileChipBtn = document.getElementById("profile-chip");
+  const profileAvatarEl = document.getElementById("profile-avatar");
+  const profileDropdown = document.getElementById("profile-dropdown");
+  const profileDropdownName = document.getElementById("profile-dropdown-name");
+  const switchWhoBtn = document.getElementById("switch-who-btn");
+  const openSettingsBtn = document.getElementById("open-settings-btn");
+
+  const settingsModalBackdrop = document.getElementById("settings-modal-backdrop");
+  const settingsCloseBtn = document.getElementById("settings-close-btn");
+  const settingsHoursStart = document.getElementById("settings-hours-start");
+  const settingsHoursEnd = document.getElementById("settings-hours-end");
+  const settingsAvatarPreview = document.getElementById("settings-avatar-preview");
+  const settingsAvatarInput = document.getElementById("settings-avatar-input");
+  const settingsAvatarRemove = document.getElementById("settings-avatar-remove");
+  const settingsOldPasswordInput = document.getElementById("settings-old-password");
+  const settingsNewPasswordInput = document.getElementById("settings-new-password");
+  const settingsNewPasswordConfirmInput = document.getElementById("settings-new-password-confirm");
+  const settingsPasswordError = document.getElementById("settings-password-error");
+  const settingsPasswordSuccess = document.getElementById("settings-password-success");
+  const settingsPasswordSaveBtn = document.getElementById("settings-password-save");
+  const settingsNewNameInput = document.getElementById("settings-new-name");
+  const settingsRenamePasswordInput = document.getElementById("settings-rename-password");
+  const settingsRenameError = document.getElementById("settings-rename-error");
+  const settingsRenameSaveBtn = document.getElementById("settings-rename-save");
+
   let who = (localStorage.getItem(WHO_KEY) || "").trim();
-  let entries, sessions, companies, activeTimer, lastStopped;
+  let entries, sessions, companies, activeTimer, lastStopped, profile;
   let knownPeople = loadJson(PEOPLE_CACHE_KEY, []);
 
   let weekStart = mondayOf(todayStr());
@@ -115,6 +139,11 @@ window.addEventListener("error", (e) => {
     scheduleSyncPush();
   }
 
+  function saveProfile() {
+    localStorage.setItem(keyFor(PROFILE_KEY), JSON.stringify(profile));
+    scheduleSyncPush();
+  }
+
   function saveActive() {
     if (activeTimer) {
       localStorage.setItem(keyFor(ACTIVE_KEY), JSON.stringify(activeTimer));
@@ -154,9 +183,23 @@ window.addEventListener("error", (e) => {
     if (!newWho) return;
     if (localStorage.getItem(keyForWho(ENTRIES_KEY, newWho)) !== null) return;
     if (localStorage.getItem(ENTRIES_KEY) === null) return;
-    [ENTRIES_KEY, SESSIONS_KEY, COMPANIES_KEY, ACTIVE_KEY, LAST_STOPPED_KEY].forEach((base) => {
+    [ENTRIES_KEY, SESSIONS_KEY, COMPANIES_KEY, ACTIVE_KEY, LAST_STOPPED_KEY, PROFILE_KEY].forEach((base) => {
       const raw = localStorage.getItem(base);
       if (raw !== null) localStorage.setItem(keyForWho(base, newWho), raw);
+    });
+  }
+
+  // moves all per-identity local keys from one who to another (used by
+  // rename, after the server-side rename has already succeeded).
+  function migrateWhoKeys(oldWho, newWho) {
+    [ENTRIES_KEY, SESSIONS_KEY, COMPANIES_KEY, ACTIVE_KEY, LAST_STOPPED_KEY, PROFILE_KEY].forEach((base) => {
+      const oldKey = keyForWho(base, oldWho);
+      const newKey = keyForWho(base, newWho);
+      const raw = localStorage.getItem(oldKey);
+      if (raw !== null) {
+        localStorage.setItem(newKey, raw);
+        localStorage.removeItem(oldKey);
+      }
     });
   }
 
@@ -166,6 +209,7 @@ window.addEventListener("error", (e) => {
     companies = loadJson(keyFor(COMPANIES_KEY), []);
     activeTimer = loadJson(keyFor(ACTIVE_KEY), null);
     lastStopped = loadJson(keyFor(LAST_STOPPED_KEY), null);
+    profile = loadJson(keyFor(PROFILE_KEY), null);
 
     if (entries === null) {
       entries = who ? [] : migrateLegacyEntries();
@@ -175,6 +219,11 @@ window.addEventListener("error", (e) => {
     if (companies.length === 0 && entries.length > 0) {
       companies = [...new Set(entries.map((e) => e.company).filter(Boolean))].sort((a, b) => a.localeCompare(b));
       saveCompanies();
+    }
+
+    if (profile === null) {
+      profile = { ...DEFAULT_PROFILE };
+      saveProfile();
     }
   }
 
@@ -215,7 +264,7 @@ window.addEventListener("error", (e) => {
     setSyncStatus("Syncing…");
     clearTimeout(syncPushTimer);
     syncPushTimer = setTimeout(async () => {
-      const ok = await TTSync.putUserData(who, { entries, sessions, companies, lastStopped });
+      const ok = await TTSync.putUserData(who, { entries, sessions, companies, lastStopped, profile });
       setSyncStatus(ok ? "Synced" : "Offline (saved locally)");
     }, 800);
   }
@@ -236,14 +285,17 @@ window.addEventListener("error", (e) => {
       sessions = remote.sessions || [];
       companies = remote.companies || [];
       lastStopped = remote.lastStopped || null;
+      profile = remote.profile || { ...DEFAULT_PROFILE };
       saveEntries();
       saveSessions();
       saveCompanies();
       saveLastStopped();
+      saveProfile();
       materializeWrapEntries();
       materializeCarryOvers();
       renderCompanyList();
       renderAll();
+      updateProfileChip();
       setSyncStatus("Synced");
     } else {
       setSyncStatus("Offline (using local copy)");
@@ -294,7 +346,10 @@ window.addEventListener("error", (e) => {
     if (e.target === gateEl && gateEl.dataset.dismissable === "1" && who) hideGate();
   });
 
-  switchWhoBtn.addEventListener("click", () => showGate(true));
+  switchWhoBtn.addEventListener("click", () => {
+    profileDropdown.hidden = true;
+    showGate(true);
+  });
 
   gateStepName.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -400,7 +455,6 @@ window.addEventListener("error", (e) => {
     migrateBaseToWhoIfNeeded(name);
     who = name;
     localStorage.setItem(WHO_KEY, who);
-    whoDisplay.textContent = who;
     registerPerson(who);
     hideGate();
     bootApp();
@@ -412,6 +466,7 @@ window.addEventListener("error", (e) => {
     materializeCarryOvers();
     renderCompanyList();
     renderAll();
+    updateProfileChip();
     if (activeTimer) startTicking();
     if (!window.TTSync || !TTSync.enabled()) {
       setSyncStatus("Local only");
@@ -419,6 +474,200 @@ window.addEventListener("error", (e) => {
       syncPullAndReconcile();
     }
   }
+
+  // ---------- profile chip / dropdown / settings ----------
+
+  function initialsColor(name) {
+    const key = (name || "").trim().toLowerCase();
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+    return CATEGORICAL_COLORS[hash % CATEGORICAL_COLORS.length];
+  }
+
+  function paintAvatar(el) {
+    if (!el) return;
+    if (profile && profile.avatar) {
+      el.style.backgroundImage = `url(${profile.avatar})`;
+      el.style.backgroundColor = "";
+      el.textContent = "";
+    } else {
+      el.style.backgroundImage = "";
+      el.style.backgroundColor = initialsColor(who);
+      el.textContent = (who || "?").trim().charAt(0).toUpperCase();
+    }
+  }
+
+  function updateProfileChip() {
+    paintAvatar(profileAvatarEl);
+    paintAvatar(settingsAvatarPreview);
+    profileDropdownName.textContent = who || "—";
+  }
+
+  profileChipBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    profileDropdown.hidden = !profileDropdown.hidden;
+  });
+
+  profileDropdown.addEventListener("click", (e) => e.stopPropagation());
+
+  document.addEventListener("click", () => {
+    profileDropdown.hidden = true;
+  });
+
+  openSettingsBtn.addEventListener("click", () => {
+    profileDropdown.hidden = true;
+    openSettingsModal();
+  });
+
+  function openSettingsModal() {
+    settingsHoursStart.value = profile.workingHoursStart;
+    settingsHoursEnd.value = profile.workingHoursEnd;
+    settingsOldPasswordInput.value = "";
+    settingsNewPasswordInput.value = "";
+    settingsNewPasswordConfirmInput.value = "";
+    settingsPasswordError.hidden = true;
+    settingsPasswordSuccess.hidden = true;
+    settingsNewNameInput.value = "";
+    settingsRenamePasswordInput.value = "";
+    settingsRenameError.hidden = true;
+    updateProfileChip();
+    settingsModalBackdrop.hidden = false;
+  }
+
+  function closeSettingsModal() {
+    settingsModalBackdrop.hidden = true;
+  }
+
+  settingsCloseBtn.addEventListener("click", closeSettingsModal);
+  settingsModalBackdrop.addEventListener("click", (e) => {
+    if (e.target === settingsModalBackdrop) closeSettingsModal();
+  });
+
+  settingsHoursStart.addEventListener("change", () => {
+    if (!settingsHoursStart.value) return;
+    profile.workingHoursStart = settingsHoursStart.value;
+    saveProfile();
+    renderAll();
+  });
+
+  settingsHoursEnd.addEventListener("change", () => {
+    if (!settingsHoursEnd.value) return;
+    profile.workingHoursEnd = settingsHoursEnd.value;
+    saveProfile();
+    renderAll();
+  });
+
+  function resizeImageToDataUrl(file, size) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("read failed"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("image decode failed"));
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext("2d");
+          const scale = Math.max(size / img.width, size / img.height);
+          const w = img.width * scale;
+          const h = img.height * scale;
+          ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+          resolve(canvas.toDataURL("image/jpeg", 0.82));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  settingsAvatarInput.addEventListener("change", async () => {
+    const file = settingsAvatarInput.files && settingsAvatarInput.files[0];
+    if (!file) return;
+    try {
+      profile.avatar = await resizeImageToDataUrl(file, AVATAR_SIZE);
+      saveProfile();
+      updateProfileChip();
+    } catch {
+      alert("Couldn't load that image — try a different file.");
+    }
+    settingsAvatarInput.value = "";
+  });
+
+  settingsAvatarRemove.addEventListener("click", () => {
+    profile.avatar = null;
+    saveProfile();
+    updateProfileChip();
+  });
+
+  settingsPasswordSaveBtn.addEventListener("click", async () => {
+    const oldPw = settingsOldPasswordInput.value;
+    const newPw = settingsNewPasswordInput.value;
+    const confirmPw = settingsNewPasswordConfirmInput.value;
+    settingsPasswordError.hidden = true;
+    settingsPasswordSuccess.hidden = true;
+
+    function fail(msg) {
+      settingsPasswordError.textContent = msg;
+      settingsPasswordError.hidden = false;
+    }
+
+    if (!window.TTSync || !TTSync.enabled()) return fail("Changing your password needs sync to be configured.");
+    if (!oldPw || !newPw) return fail("Fill in both password fields.");
+    if (newPw !== confirmPw) return fail("New passwords don't match.");
+
+    const authInfo = await TTSync.getAuth(who);
+    if (!authInfo || !authInfo.exists) return fail("Couldn't verify your account — try again.");
+    const oldHash = await pbkdf2Hex(oldPw, authInfo.salt);
+    const newSalt = randomHex(16);
+    const newHash = await pbkdf2Hex(newPw, newSalt);
+    const result = await TTSync.changePassword(who, oldHash, newSalt, newHash);
+    if (!result) return fail("Couldn't reach the server — try again.");
+    if (result.status === 401) return fail("Current password is wrong.");
+    if (!result.ok) return fail("Something went wrong — try again.");
+
+    settingsOldPasswordInput.value = "";
+    settingsNewPasswordInput.value = "";
+    settingsNewPasswordConfirmInput.value = "";
+    settingsPasswordSuccess.hidden = false;
+  });
+
+  settingsRenameSaveBtn.addEventListener("click", async () => {
+    const newName = settingsNewNameInput.value.trim();
+    const password = settingsRenamePasswordInput.value;
+    settingsRenameError.hidden = true;
+
+    function fail(msg) {
+      settingsRenameError.textContent = msg;
+      settingsRenameError.hidden = false;
+    }
+
+    if (!window.TTSync || !TTSync.enabled()) return fail("Renaming needs sync to be configured.");
+    if (!newName) return fail("Enter a new name.");
+    if (newName.toLowerCase() === who.toLowerCase()) return fail("That's already your name.");
+    if (!password) return fail("Enter your current password.");
+
+    const authInfo = await TTSync.getAuth(who);
+    if (!authInfo || !authInfo.exists) return fail("Couldn't verify your account — try again.");
+    const hash = await pbkdf2Hex(password, authInfo.salt);
+    const result = await TTSync.renameIdentity(who, newName, hash);
+    if (!result) return fail("Couldn't reach the server — try again.");
+    if (result.status === 401) return fail("Wrong password.");
+    if (result.status === 409) return fail("That name is already taken.");
+    if (!result.ok) return fail("Something went wrong — try again.");
+
+    const oldWho = who;
+    migrateWhoKeys(oldWho, newName);
+    who = newName;
+    localStorage.setItem(WHO_KEY, who);
+    knownPeople = knownPeople.filter((p) => p.toLowerCase() !== oldWho.toLowerCase());
+    if (!knownPeople.some((p) => p.toLowerCase() === newName.toLowerCase())) knownPeople.push(newName);
+    knownPeople.sort((a, b) => a.localeCompare(b));
+    localStorage.setItem(PEOPLE_CACHE_KEY, JSON.stringify(knownPeople));
+    renderPeopleList();
+    closeSettingsModal();
+    bootApp();
+  });
 
   // ---------- date helpers ----------
 
@@ -533,6 +782,71 @@ window.addEventListener("error", (e) => {
 
   function getWrapEntry(date) {
     return entries.find((e) => e.date === date && e.isWrap);
+  }
+
+  // finds every stretch of the day's working-hours window (extended to
+  // cover any actual activity outside it) not covered by any session —
+  // leading and trailing gaps included, unlike the timeline's "Missing"
+  // row which only flags interior gaps.
+  function findGapsForDay(date) {
+    const daySessions = sessions.filter((s) => s.date === date).map((s) => [new Date(s.start).getTime(), new Date(s.end).getTime()]);
+    if (activeTimer) {
+      const entry = getEntry(activeTimer.entryId);
+      if (entry && entry.date === date) {
+        daySessions.push([new Date(activeTimer.start).getTime(), Date.now()]);
+      }
+    }
+
+    const workStartMs = new Date(timeInputToIso(date, profile.workingHoursStart)).getTime();
+    const workEndMs = new Date(timeInputToIso(date, profile.workingHoursEnd)).getTime();
+    const windowStart = Math.min(workStartMs, ...daySessions.map((s) => s[0]));
+    let windowEnd = Math.max(workEndMs, ...daySessions.map((s) => s[1]));
+    if (date === todayStr()) windowEnd = Math.min(windowEnd, Date.now());
+    if (windowEnd <= windowStart) return [];
+
+    const merged = mergeIntervals(daySessions);
+    const gaps = [];
+    let cursor = windowStart;
+    for (const [s, e] of merged) {
+      if (s > cursor) gaps.push([cursor, Math.min(s, windowEnd)]);
+      cursor = Math.max(cursor, e);
+    }
+    if (cursor < windowEnd) gaps.push([cursor, windowEnd]);
+    return gaps.filter(([s, e]) => e - s > 0);
+  }
+
+  function fillGapsAsWrap(date) {
+    const gaps = findGapsForDay(date);
+    if (gaps.length === 0) {
+      alert("No gaps to fill for this day.");
+      return;
+    }
+    const wrapEntry = getWrapEntry(date);
+    if (!wrapEntry) return;
+
+    const totalGapMs = gaps.reduce((sum, [s, e]) => sum + (e - s), 0);
+    const ok = window.confirm(
+      `Fill ${formatDuration(totalGapMs)} of untracked time as Wrap, across ${gaps.length} gap${gaps.length > 1 ? "s" : ""}?`
+    );
+    if (!ok) return;
+
+    for (const [s, e] of gaps) {
+      sessions.push({
+        id: uid(),
+        entryId: wrapEntry.id,
+        date,
+        company: wrapEntry.company,
+        ticket: wrapEntry.ticket,
+        description: wrapEntry.description,
+        start: new Date(s).toISOString(),
+        end: new Date(e).toISOString(),
+        type: "manual",
+      });
+    }
+    recomputeEntryTotal(wrapEntry);
+    saveEntries();
+    saveSessions();
+    renderAll();
   }
 
   // ---------- carry-over materialization ----------
@@ -997,12 +1311,19 @@ window.addEventListener("error", (e) => {
     const wrapEntry = dayEntries.find((e) => e.isWrap);
     const ticketEntries = dayEntries.filter((e) => !e.isWrap);
 
+    const targetMs = Math.max(
+      0,
+      new Date(timeInputToIso(date, profile.workingHoursEnd)) - new Date(timeInputToIso(date, profile.workingHoursStart))
+    );
+    const targetClass = targetMs > 0 && dayTotal >= targetMs ? "target-met" : "target-under";
+
     const header = document.createElement("div");
     header.className = "day-header";
     header.innerHTML = `
       <div class="day-title">${formatDayLabel(date)}${isToday ? '<span class="today-badge">Today</span>' : ""}</div>
       <div class="day-header-right">
-        <span class="day-total mono">${formatDuration(dayTotal)}</span>
+        <span class="day-total mono ${targetClass}">${formatDuration(dayTotal)}${targetMs > 0 ? ` <span class="target-sep">/</span> ${formatDuration(targetMs)}` : ""}</span>
+        <button class="btn btn-ghost btn-small" data-fill-gaps="${date}">Fill gaps as Wrap</button>
         <button class="btn btn-ghost btn-small" data-export-totals="${date}">Export Totals</button>
         <button class="btn btn-ghost btn-small" data-export-timeline="${date}">Export Timeline</button>
       </div>
@@ -1052,6 +1373,7 @@ window.addEventListener("error", (e) => {
 
     header.querySelector(`[data-export-totals]`).addEventListener("click", () => exportTotalsCsv(date, dayEntries));
     header.querySelector(`[data-export-timeline]`).addEventListener("click", () => exportTimelineCsv(date));
+    header.querySelector(`[data-fill-gaps]`).addEventListener("click", () => fillGapsAsWrap(date));
 
     return section;
   }
@@ -1386,18 +1708,15 @@ window.addEventListener("error", (e) => {
       return container;
     }
 
-    // Round to clean 15-min boundaries and enforce a minimum span so the
-    // axis doesn't rescale to fit every tiny addition — an axis that
-    // stretches to match new data hides the very change it's showing
-    // (a fresh 5-minute add would otherwise render at ~100% width next
-    // to nothing, making it look like nothing happened).
-    let windowStart = Math.floor(Math.min(...segments.map((s) => s.startMs)) / TIMELINE_ROUND_MS) * TIMELINE_ROUND_MS;
-    let windowEnd = Math.ceil(Math.max(...segments.map((s) => s.endMs)) / TIMELINE_ROUND_MS) * TIMELINE_ROUND_MS;
-    if (windowEnd - windowStart < TIMELINE_MIN_WINDOW_MS) {
-      const pad = (TIMELINE_MIN_WINDOW_MS - (windowEnd - windowStart)) / 2;
-      windowStart -= pad;
-      windowEnd += pad;
-    }
+    // Anchored to working hours rather than the min/max of the day's own
+    // segments — a fixed, stable reference frame so a small addition
+    // grows the bar instead of rescaling the whole axis to fit it. Actual
+    // activity outside working hours still extends the window so nothing
+    // gets clipped.
+    const workStartMs = new Date(timeInputToIso(date, profile.workingHoursStart)).getTime();
+    const workEndMs = new Date(timeInputToIso(date, profile.workingHoursEnd)).getTime();
+    const windowStart = Math.min(workStartMs, ...segments.map((s) => s.startMs));
+    const windowEnd = Math.max(workEndMs, ...segments.map((s) => s.endMs));
     const windowMs = Math.max(1, windowEnd - windowStart);
 
     // one skinny row per company (Wrap included), in first-appearance-safe
@@ -1611,7 +1930,6 @@ window.addEventListener("error", (e) => {
   refreshRemotePeople();
 
   if (who) {
-    whoDisplay.textContent = who;
     hideGate();
     bootApp();
   } else {

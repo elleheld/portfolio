@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Time Tracker</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="stylesheet" href="style.css?v=6" />
+<link rel="stylesheet" href="style.css?v=7" />
 </head>
 <body>
   <div class="app">
@@ -15,12 +15,20 @@
           <h1>⏱ Time Tracker</h1>
           <p class="subtitle">Company, ticket, and what you did — timed or backfilled.</p>
         </div>
-        <a class="btn btn-ghost btn-small" href="dashboard.html">Live Dashboard →</a>
-      </div>
-      <div class="who-row">
-        <span>Tracking as <strong id="who-display">—</strong></span>
-        <button id="switch-who-btn" class="btn btn-ghost btn-small">Switch</button>
-        <span id="sync-status" class="sync-status"></span>
+        <div class="header-right">
+          <a class="btn btn-ghost btn-small" href="dashboard.html">Live Dashboard →</a>
+          <div class="profile-menu">
+            <button id="profile-chip" class="profile-chip" title="Profile">
+              <span id="profile-avatar" class="profile-avatar">?</span>
+            </button>
+            <div id="profile-dropdown" class="profile-dropdown" hidden>
+              <div class="profile-dropdown-name" id="profile-dropdown-name">—</div>
+              <div id="sync-status" class="sync-status"></div>
+              <button id="switch-who-btn" class="dropdown-item">Switch identity</button>
+              <button id="open-settings-btn" class="dropdown-item">&#9881; Settings</button>
+            </div>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -98,8 +106,77 @@
     </div>
   </div>
 
+  <div id="settings-modal-backdrop" class="modal-backdrop" hidden>
+    <div class="modal settings-modal">
+      <h3>Settings</h3>
+
+      <section class="settings-section">
+        <h4>Working hours</h4>
+        <p class="settings-hint">Anchors each day's timeline and sets your daily target.</p>
+        <div class="settings-row">
+          <div class="modal-field">
+            <label for="settings-hours-start">Start</label>
+            <input type="time" id="settings-hours-start" step="60" />
+          </div>
+          <div class="modal-field">
+            <label for="settings-hours-end">End</label>
+            <input type="time" id="settings-hours-end" step="60" />
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <h4>Profile picture</h4>
+        <div class="settings-avatar-row">
+          <span id="settings-avatar-preview" class="profile-avatar profile-avatar-lg">?</span>
+          <div class="settings-avatar-controls">
+            <input type="file" id="settings-avatar-input" accept="image/*" />
+            <button id="settings-avatar-remove" class="btn btn-ghost btn-small">Remove</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <h4>Change password</h4>
+        <div class="modal-field">
+          <label for="settings-old-password">Current password</label>
+          <input type="password" id="settings-old-password" autocomplete="off" />
+        </div>
+        <div class="modal-field">
+          <label for="settings-new-password">New password</label>
+          <input type="password" id="settings-new-password" autocomplete="off" />
+        </div>
+        <div class="modal-field">
+          <label for="settings-new-password-confirm">Confirm new password</label>
+          <input type="password" id="settings-new-password-confirm" autocomplete="off" />
+        </div>
+        <p id="settings-password-error" class="gate-error" hidden></p>
+        <p id="settings-password-success" class="settings-success" hidden>Password updated.</p>
+        <button id="settings-password-save" class="btn btn-primary btn-small">Update password</button>
+      </section>
+
+      <section class="settings-section">
+        <h4>Change name</h4>
+        <div class="modal-field">
+          <label for="settings-new-name">New name</label>
+          <input type="text" id="settings-new-name" autocomplete="off" />
+        </div>
+        <div class="modal-field">
+          <label for="settings-rename-password">Current password</label>
+          <input type="password" id="settings-rename-password" autocomplete="off" />
+        </div>
+        <p id="settings-rename-error" class="gate-error" hidden></p>
+        <button id="settings-rename-save" class="btn btn-primary btn-small">Rename</button>
+      </section>
+
+      <div class="modal-actions">
+        <button id="settings-close-btn" class="btn btn-ghost">Close</button>
+      </div>
+    </div>
+  </div>
+
   <script src="config.js?v=1"></script>
-  <script src="sync.js?v=2"></script>
+  <script src="sync.js?v=3"></script>
   <script src="app.js?v=7"></script>
 </body>
 </html>
