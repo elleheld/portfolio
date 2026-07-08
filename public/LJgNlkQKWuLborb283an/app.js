@@ -21,6 +21,8 @@ window.addEventListener("error", (e) => {
   const PEOPLE_CACHE_KEY = "timeTracker.people";
 
   const GAP_THRESHOLD_MS = 60 * 1000;
+  const TIMELINE_ROUND_MS = 15 * 60 * 1000;
+  const TIMELINE_MIN_WINDOW_MS = 60 * 60 * 1000;
   const WRAP_COMPANY = "Wrap";
   const PBKDF2_ITERATIONS = 100000;
 
@@ -650,6 +652,14 @@ window.addEventListener("error", (e) => {
     saveActive();
     if (who && window.TTSync && TTSync.enabled()) TTSync.clearActive(who);
     stopTicking();
+
+    // Wrap automatically picks up whenever a ticket timer stops, so time
+    // is never silently untracked between tickets. Stopping Wrap itself
+    // doesn't re-trigger this (nothing to fill a gap after Wrap stops).
+    if (entry && !entry.isWrap && entry.date === todayStr()) {
+      const wrapEntry = getWrapEntry(todayStr());
+      if (wrapEntry) startTimerOn(wrapEntry.id);
+    }
   }
 
   function addManualMinutes(entryId, minutes) {
@@ -1079,6 +1089,18 @@ window.addEventListener("error", (e) => {
       if (isRunning) {
         stopActiveTimer();
         renderAll();
+      } else if (entry.totalMs > 0) {
+        // this ticket already has time logged — ask whether to continue
+        // that same entry or keep this run as a separate line item.
+        const continueSame = window.confirm(
+          `"${entry.company} · ${entry.ticket}" already has ${formatDuration(entry.totalMs)} logged today.\n\nOK — continue that entry.\nCancel — start a new, separate entry for it.`
+        );
+        if (continueSame) {
+          startTimerOn(entry.id);
+        } else {
+          const dup = createEntry(entry.date, entry.company, entry.ticket, entry.description);
+          startTimerOn(dup.id);
+        }
       } else {
         startTimerOn(entry.id);
       }
@@ -1223,8 +1245,18 @@ window.addEventListener("error", (e) => {
       return container;
     }
 
-    const windowStart = Math.min(...segments.map((s) => s.startMs));
-    const windowEnd = Math.max(...segments.map((s) => s.endMs));
+    // Round to clean 15-min boundaries and enforce a minimum span so the
+    // axis doesn't rescale to fit every tiny addition — an axis that
+    // stretches to match new data hides the very change it's showing
+    // (a fresh 5-minute add would otherwise render at ~100% width next
+    // to nothing, making it look like nothing happened).
+    let windowStart = Math.floor(Math.min(...segments.map((s) => s.startMs)) / TIMELINE_ROUND_MS) * TIMELINE_ROUND_MS;
+    let windowEnd = Math.ceil(Math.max(...segments.map((s) => s.endMs)) / TIMELINE_ROUND_MS) * TIMELINE_ROUND_MS;
+    if (windowEnd - windowStart < TIMELINE_MIN_WINDOW_MS) {
+      const pad = (TIMELINE_MIN_WINDOW_MS - (windowEnd - windowStart)) / 2;
+      windowStart -= pad;
+      windowEnd += pad;
+    }
     const windowMs = Math.max(1, windowEnd - windowStart);
 
     // one skinny row per company (Wrap included), in first-appearance-safe
