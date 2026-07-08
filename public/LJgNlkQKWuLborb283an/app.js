@@ -21,6 +21,8 @@ window.addEventListener("error", (e) => {
   const PEOPLE_CACHE_KEY = "timeTracker.people";
 
   const GAP_THRESHOLD_MS = 60 * 1000;
+  const WRAP_COMPANY = "Wrap";
+  const PBKDF2_ITERATIONS = 100000;
 
   // dataviz categorical palette (dark-mode steps), red reserved for the
   // "missing time" status so it never doubles as a company color.
@@ -48,9 +50,22 @@ window.addEventListener("error", (e) => {
   const timeModalSave = document.getElementById("time-modal-save");
 
   const tooltipEl = document.getElementById("viz-tooltip");
-  const whoInput = document.getElementById("who-input");
+  const whoDisplay = document.getElementById("who-display");
+  const switchWhoBtn = document.getElementById("switch-who-btn");
   const peopleListEl = document.getElementById("people-list");
   const syncStatusEl = document.getElementById("sync-status");
+
+  const gateEl = document.getElementById("identity-gate");
+  const gateStepName = document.getElementById("gate-step-name");
+  const gateNameInput = document.getElementById("gate-name-input");
+  const gateNameError = document.getElementById("gate-name-error");
+  const gateStepPassword = document.getElementById("gate-step-password");
+  const gatePasswordContext = document.getElementById("gate-password-context");
+  const gatePasswordInput = document.getElementById("gate-password-input");
+  const gateConfirmField = document.getElementById("gate-confirm-field");
+  const gatePasswordConfirm = document.getElementById("gate-password-confirm");
+  const gatePasswordError = document.getElementById("gate-password-error");
+  const gateBackBtn = document.getElementById("gate-back-btn");
 
   let who = (localStorage.getItem(WHO_KEY) || "").trim();
   let entries, sessions, companies, activeTimer, lastStopped;
@@ -222,6 +237,7 @@ window.addEventListener("error", (e) => {
       saveSessions();
       saveCompanies();
       saveLastStopped();
+      materializeWrapEntries();
       materializeCarryOvers();
       renderCompanyList();
       renderAll();
@@ -231,27 +247,175 @@ window.addEventListener("error", (e) => {
     }
   }
 
-  function switchWho(newWho) {
-    const trimmed = newWho.trim();
-    if (trimmed === who) return;
+  // ---------- identity gate (name + password) ----------
+
+  function randomHex(byteLen) {
+    const arr = new Uint8Array(byteLen);
+    crypto.getRandomValues(arr);
+    return [...arr].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  function hexToBytes(hex) {
+    return new Uint8Array(hex.match(/.{2}/g).map((h) => parseInt(h, 16)));
+  }
+
+  async function pbkdf2Hex(password, saltHex) {
+    const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+    const bits = await crypto.subtle.deriveBits(
+      { name: "PBKDF2", salt: hexToBytes(saltHex), iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
+      keyMaterial,
+      256
+    );
+    return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  let gatePendingName = "";
+  let gatePendingIsNew = false;
+  let gatePendingSalt = "";
+
+  function showGate(dismissable) {
+    gateEl.hidden = false;
+    gateEl.dataset.dismissable = dismissable ? "1" : "";
+    gateStepName.hidden = false;
+    gateStepPassword.hidden = true;
+    gateNameError.hidden = true;
+    gateNameInput.value = "";
+    gateNameInput.focus();
+  }
+
+  function hideGate() {
+    gateEl.hidden = true;
+  }
+
+  gateEl.addEventListener("click", (e) => {
+    if (e.target === gateEl && gateEl.dataset.dismissable === "1" && who) hideGate();
+  });
+
+  switchWhoBtn.addEventListener("click", () => showGate(true));
+
+  gateStepName.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = gateNameInput.value.trim();
+    gateNameError.hidden = true;
+    if (!name) {
+      gateNameError.textContent = "Enter a name.";
+      gateNameError.hidden = false;
+      return;
+    }
+
+    if (!window.TTSync || !TTSync.enabled()) {
+      // no backend to check a password against — proceed local-only
+      completeIdentity(name);
+      return;
+    }
+
+    gatePendingName = name;
+    const authInfo = await TTSync.getAuth(name);
+    gatePasswordError.hidden = true;
+    gatePasswordInput.value = "";
+    gatePasswordConfirm.value = "";
+
+    if (authInfo && authInfo.exists) {
+      gatePendingIsNew = false;
+      gatePendingSalt = authInfo.salt;
+      gatePasswordContext.textContent = `Enter the password for "${name}".`;
+      gateConfirmField.hidden = true;
+    } else {
+      gatePendingIsNew = true;
+      gatePendingSalt = randomHex(16);
+      gatePasswordContext.textContent = `"${name}" is a new name — set a password for it.`;
+      gateConfirmField.hidden = false;
+    }
+
+    gateStepName.hidden = true;
+    gateStepPassword.hidden = false;
+    gatePasswordInput.focus();
+  });
+
+  gateBackBtn.addEventListener("click", () => {
+    gateStepPassword.hidden = true;
+    gateStepName.hidden = false;
+    gateNameInput.focus();
+  });
+
+  gateStepPassword.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const password = gatePasswordInput.value;
+    gatePasswordError.hidden = true;
+
+    if (!password) {
+      gatePasswordError.textContent = "Enter a password.";
+      gatePasswordError.hidden = false;
+      return;
+    }
+    if (gatePendingIsNew && password !== gatePasswordConfirm.value) {
+      gatePasswordError.textContent = "Passwords don't match.";
+      gatePasswordError.hidden = false;
+      return;
+    }
+
+    const hash = await pbkdf2Hex(password, gatePendingSalt);
+
+    if (gatePendingIsNew) {
+      const result = await TTSync.registerAuth(gatePendingName, gatePendingSalt, hash);
+      if (!result) {
+        gatePasswordError.textContent = "Couldn't reach the server — try again.";
+        gatePasswordError.hidden = false;
+        return;
+      }
+      if (result.status === 409) {
+        gatePasswordError.textContent = "Someone just took that name — go back and try another, or sign in if it's you.";
+        gatePasswordError.hidden = false;
+        return;
+      }
+      if (!result.ok) {
+        gatePasswordError.textContent = "Something went wrong — try again.";
+        gatePasswordError.hidden = false;
+        return;
+      }
+    } else {
+      const result = await TTSync.verifyAuth(gatePendingName, hash);
+      if (!result) {
+        gatePasswordError.textContent = "Couldn't reach the server — try again.";
+        gatePasswordError.hidden = false;
+        return;
+      }
+      if (!result.ok || !(result.body && result.body.ok)) {
+        gatePasswordError.textContent = "Wrong password.";
+        gatePasswordError.hidden = false;
+        gatePasswordInput.value = "";
+        gatePasswordInput.focus();
+        return;
+      }
+    }
+
+    completeIdentity(gatePendingName);
+  });
+
+  function completeIdentity(name) {
     stopTicking();
-    migrateBaseToWhoIfNeeded(trimmed);
-    who = trimmed;
+    migrateBaseToWhoIfNeeded(name);
+    who = name;
     localStorage.setItem(WHO_KEY, who);
+    whoDisplay.textContent = who;
+    registerPerson(who);
+    hideGate();
+    bootApp();
+  }
+
+  function bootApp() {
     loadStateForWho();
+    materializeWrapEntries();
     materializeCarryOvers();
     renderCompanyList();
     renderAll();
     if (activeTimer) startTicking();
-    syncPullAndReconcile();
+    if (!window.TTSync || !TTSync.enabled()) {
+      setSyncStatus("Local only");
+    } else {
+      syncPullAndReconcile();
+    }
   }
-
-  whoInput.addEventListener("change", () => {
-    const val = whoInput.value.trim();
-    if (!val || val === who) return;
-    switchWho(val);
-    registerPerson(val);
-  });
 
   // ---------- date helpers ----------
 
@@ -334,6 +498,38 @@ window.addEventListener("error", (e) => {
   function isoToTimeInput(isoString) {
     const d = new Date(isoString);
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+
+  // ---------- wrap (non-ticket time) materialization ----------
+
+  // every day that's about to be shown in full (today, or any day that
+  // already has real entries) gets exactly one Wrap row, auto-created if
+  // missing, for time not attributable to a specific ticket.
+  function materializeWrapEntries() {
+    const today = todayStr();
+    const dates = new Set([today, ...entries.map((e) => e.date)]);
+    let changed = false;
+    for (const date of dates) {
+      if (!entries.some((e) => e.date === date && e.isWrap)) {
+        entries.push({
+          id: uid(),
+          date,
+          company: WRAP_COMPANY,
+          ticket: "—",
+          description: "",
+          totalMs: 0,
+          carryOver: false,
+          carried: true,
+          isWrap: true,
+        });
+        changed = true;
+      }
+    }
+    if (changed) saveEntries();
+  }
+
+  function getWrapEntry(date) {
+    return entries.find((e) => e.date === date && e.isWrap);
   }
 
   // ---------- carry-over materialization ----------
@@ -732,6 +928,8 @@ window.addEventListener("error", (e) => {
     section.className = "day-card" + (isToday ? " day-card-today" : "");
 
     const dayTotal = dayEntries.reduce((sum, e) => sum + e.totalMs, 0);
+    const wrapEntry = dayEntries.find((e) => e.isWrap);
+    const ticketEntries = dayEntries.filter((e) => !e.isWrap);
 
     const header = document.createElement("div");
     header.className = "day-header";
@@ -744,6 +942,10 @@ window.addEventListener("error", (e) => {
       </div>
     `;
     section.appendChild(header);
+
+    if (wrapEntry) {
+      section.appendChild(renderWrapSection(wrapEntry));
+    }
 
     const table = document.createElement("table");
     table.className = "entries-table";
@@ -763,7 +965,7 @@ window.addEventListener("error", (e) => {
     `;
     const tbody = table.querySelector("tbody");
 
-    for (const entry of dayEntries) {
+    for (const entry of ticketEntries) {
       tbody.appendChild(renderEntryRow(entry));
     }
 
@@ -783,6 +985,56 @@ window.addEventListener("error", (e) => {
     header.querySelector(`[data-export-timeline]`).addEventListener("click", () => exportTimelineCsv(date));
 
     return section;
+  }
+
+  function renderWrapSection(entry) {
+    const isRunning = activeTimer && activeTimer.entryId === entry.id;
+    const div = document.createElement("div");
+    div.className = "wrap-section" + (isRunning ? " row-running" : "");
+
+    div.innerHTML = `
+      <span class="wrap-icon">&#9889;</span>
+      <span class="wrap-label">Wrap<small>non-ticket time</small></span>
+      <input type="text" class="cell-input" placeholder="What kind of overhead? (optional)" data-field="description" value="${escapeHtml(entry.description)}" />
+      <div class="action-buttons">
+        <button class="btn btn-small ${isRunning ? "btn-danger" : "btn-primary"}" data-timer-toggle>${isRunning ? "Stop" : "Start"}</button>
+        <button class="btn btn-ghost btn-small" data-add5>+5m</button>
+        <button class="btn btn-ghost btn-small" data-addcustom>+Custom</button>
+        <button class="btn btn-ghost btn-small" data-times title="Set a custom start and end time">Times</button>
+      </div>
+      <span class="wrap-time mono" data-time-for="${entry.id}">${formatDuration(entry.totalMs)}</span>
+    `;
+
+    div.querySelector(`[data-field]`).addEventListener("change", (e) => {
+      entry.description = e.target.value.trim();
+      saveEntries();
+      if (isRunning) renderBoltSection();
+    });
+
+    div.querySelector(`[data-timer-toggle]`).addEventListener("click", () => {
+      if (isRunning) {
+        stopActiveTimer();
+        renderAll();
+      } else {
+        startTimerOn(entry.id);
+      }
+    });
+
+    div.querySelector(`[data-add5]`).addEventListener("click", () => addManualMinutes(entry.id, 5));
+
+    div.querySelector(`[data-addcustom]`).addEventListener("click", () => {
+      const input = window.prompt("Minutes to add:", "15");
+      if (input === null) return;
+      const minutes = parseFloat(input);
+      if (!Number.isFinite(minutes) || minutes <= 0) return;
+      addManualMinutes(entry.id, minutes);
+    });
+
+    div.querySelector(`[data-times]`).addEventListener("click", () => {
+      openTimeModal({ type: "entry", id: entry.id });
+    });
+
+    return div;
   }
 
   function renderEntryRow(entry) {
@@ -913,6 +1165,20 @@ window.addEventListener("error", (e) => {
 
   // ---------- timeline (dataviz) ----------
 
+  function mergeIntervals(intervals) {
+    const sorted = intervals.slice().sort((a, b) => a[0] - b[0]);
+    const merged = [];
+    for (const [start, end] of sorted) {
+      const last = merged[merged.length - 1];
+      if (last && start <= last[1]) {
+        last[1] = Math.max(last[1], end);
+      } else {
+        merged.push([start, end]);
+      }
+    }
+    return merged;
+  }
+
   function buildTimeline(date) {
     const daySessions = sessions
       .filter((s) => s.date === date)
@@ -942,83 +1208,106 @@ window.addEventListener("error", (e) => {
       }
     }
 
-    segments.sort((a, b) => a.startMs - b.startMs);
-
     const container = document.createElement("div");
-
-    if (segments.length === 0) {
-      container.innerHTML = `<div class="timeline-empty">No timed sessions yet today.</div>`;
-      return container;
-    }
-
-    // fold in red gap segments between consecutive tracked blocks
-    const withGaps = [];
-    for (let i = 0; i < segments.length; i++) {
-      withGaps.push(segments[i]);
-      const next = segments[i + 1];
-      if (next && next.startMs - segments[i].endMs >= GAP_THRESHOLD_MS) {
-        withGaps.push({
-          startMs: segments[i].endMs,
-          endMs: next.startMs,
-          kind: "gap",
-        });
-      }
-    }
-
-    const windowStart = withGaps[0].startMs;
-    const windowEnd = withGaps[withGaps.length - 1].endMs;
-    const windowMs = Math.max(1, windowEnd - windowStart);
 
     const heading = document.createElement("div");
     heading.className = "timeline-heading";
     heading.textContent = "Timeline";
     container.appendChild(heading);
 
-    const bar = document.createElement("div");
-    bar.className = "timeline-bar";
+    if (segments.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "timeline-empty";
+      empty.textContent = "No timed sessions yet today.";
+      container.appendChild(empty);
+      return container;
+    }
 
-    withGaps.forEach((seg, i) => {
-      const el = document.createElement("div");
-      const widthPct = ((seg.endMs - seg.startMs) / windowMs) * 100;
-      el.className = "timeline-seg" + (seg.kind === "gap" ? " timeline-seg-gap" : "") + (seg.kind === "live" ? " timeline-seg-live" : "");
-      el.style.flexBasis = `${widthPct}%`;
-      el.style.background = seg.kind === "gap" ? CRITICAL_COLOR : companyColor(seg.company);
-      el.tabIndex = 0;
+    const windowStart = Math.min(...segments.map((s) => s.startMs));
+    const windowEnd = Math.max(...segments.map((s) => s.endMs));
+    const windowMs = Math.max(1, windowEnd - windowStart);
 
-      const label =
-        seg.kind === "gap"
-          ? `Missing time — ${formatClock(new Date(seg.startMs).toISOString())}–${formatClock(new Date(seg.endMs).toISOString())} (${formatDuration(seg.endMs - seg.startMs)})`
-          : `${seg.company} · ${seg.ticket}${seg.description ? " — " + seg.description : ""} — ${formatClock(new Date(seg.startMs).toISOString())}–${formatClock(new Date(seg.endMs).toISOString())} (${formatDuration(seg.endMs - seg.startMs)})`;
-
-      el.addEventListener("mouseenter", (e) => showTooltip(label, e.currentTarget));
-      el.addEventListener("focus", (e) => showTooltip(label, e.currentTarget));
-      el.addEventListener("mouseleave", hideTooltip);
-      el.addEventListener("blur", hideTooltip);
-
-      bar.appendChild(el);
+    // one skinny row per company (Wrap included), in first-appearance-safe
+    // fixed order: Wrap first, then alphabetical.
+    const byCompany = new Map();
+    for (const seg of segments) {
+      const key = seg.company.trim().toLowerCase();
+      if (!byCompany.has(key)) byCompany.set(key, { name: seg.company, segs: [] });
+      byCompany.get(key).segs.push(seg);
+    }
+    const companyRows = [...byCompany.values()].sort((a, b) => {
+      if (a.name === WRAP_COMPANY) return -1;
+      if (b.name === WRAP_COMPANY) return 1;
+      return a.name.localeCompare(b.name);
     });
 
-    container.appendChild(bar);
+    const rowsWrap = document.createElement("div");
+    rowsWrap.className = "timeline-rows";
+
+    for (const row of companyRows) {
+      const totalMs = row.segs.reduce((sum, s) => sum + (s.endMs - s.startMs), 0);
+      rowsWrap.appendChild(buildTimelineRow(row.name, row.segs, windowStart, windowMs, totalMs, false));
+    }
+
+    // aggregate row: time not covered by any company/Wrap segment
+    const merged = mergeIntervals(segments.map((s) => [s.startMs, s.endMs]));
+    const gaps = [];
+    for (let i = 0; i < merged.length - 1; i++) {
+      const gapStart = merged[i][1];
+      const gapEnd = merged[i + 1][0];
+      if (gapEnd - gapStart >= GAP_THRESHOLD_MS) gaps.push({ startMs: gapStart, endMs: gapEnd });
+    }
+    if (gaps.length > 0) {
+      const totalGapMs = gaps.reduce((sum, g) => sum + (g.endMs - g.startMs), 0);
+      rowsWrap.appendChild(buildTimelineRow("Missing", gaps, windowStart, windowMs, totalGapMs, true));
+    }
+
+    container.appendChild(rowsWrap);
 
     const axis = document.createElement("div");
     axis.className = "timeline-axis";
-    axis.innerHTML = `<span>${formatClock(new Date(windowStart).toISOString())}</span><span>${formatClock(new Date(windowEnd).toISOString())}</span>`;
+    axis.innerHTML = `<span></span><span class="timeline-axis-labels"><span>${formatClock(new Date(windowStart).toISOString())}</span><span>${formatClock(new Date(windowEnd).toISOString())}</span></span>`;
     container.appendChild(axis);
 
-    const companiesInDay = [...new Set(segments.filter((s) => s.kind !== "gap").map((s) => s.company))];
-    const hasGap = withGaps.some((s) => s.kind === "gap");
-    if (companiesInDay.length > 0) {
-      const legend = document.createElement("div");
-      legend.className = "timeline-legend";
-      legend.innerHTML =
-        companiesInDay
-          .map((c) => `<span class="legend-item"><span class="legend-swatch" style="background:${companyColor(c)}"></span>${escapeHtml(c)}</span>`)
-          .join("") +
-        (hasGap ? `<span class="legend-item"><span class="legend-swatch" style="background:${CRITICAL_COLOR}"></span>Missing time</span>` : "");
-      container.appendChild(legend);
-    }
-
     return container;
+  }
+
+  function buildTimelineRow(name, segs, windowStart, windowMs, totalMs, isMissingRow) {
+    const row = document.createElement("div");
+    row.className = "timeline-row" + (isMissingRow ? " timeline-row-missing" : "");
+
+    const label = document.createElement("div");
+    label.className = "timeline-row-label";
+    label.innerHTML = `<span class="row-name">${escapeHtml(name)}</span><span class="mono">${formatDuration(totalMs)}</span>`;
+    row.appendChild(label);
+
+    const track = document.createElement("div");
+    track.className = "timeline-row-track";
+
+    segs.forEach((seg) => {
+      const el = document.createElement("div");
+      const leftPct = ((seg.startMs - windowStart) / windowMs) * 100;
+      const widthPct = Math.max(((seg.endMs - seg.startMs) / windowMs) * 100, 0.4);
+      el.className = "timeline-seg" + (seg.kind === "live" ? " timeline-seg-live" : "");
+      el.style.left = `${leftPct}%`;
+      el.style.width = `${widthPct}%`;
+      el.style.background = isMissingRow ? CRITICAL_COLOR : companyColor(name);
+      el.tabIndex = 0;
+
+      const label2 = isMissingRow
+        ? `Missing time — ${formatClock(new Date(seg.startMs).toISOString())}–${formatClock(new Date(seg.endMs).toISOString())} (${formatDuration(seg.endMs - seg.startMs)})`
+        : `${name}${seg.ticket ? " · " + seg.ticket : ""}${seg.description ? " — " + seg.description : ""} — ${formatClock(new Date(seg.startMs).toISOString())}–${formatClock(new Date(seg.endMs).toISOString())} (${formatDuration(seg.endMs - seg.startMs)})`;
+
+      el.addEventListener("mouseenter", (e) => showTooltip(label2, e.currentTarget));
+      el.addEventListener("focus", (e) => showTooltip(label2, e.currentTarget));
+      el.addEventListener("mouseleave", hideTooltip);
+      el.addEventListener("blur", hideTooltip);
+
+      track.appendChild(el);
+    });
+
+    row.appendChild(track);
+    return row;
   }
 
   function showTooltip(text, target) {
@@ -1145,19 +1434,14 @@ window.addEventListener("error", (e) => {
 
   // ---------- init ----------
 
-  whoInput.value = who;
-  loadStateForWho();
   renderPeopleList();
-  materializeCarryOvers();
-  renderCompanyList();
-  renderAll();
-  if (activeTimer) startTicking();
-  if (!window.TTSync || !TTSync.enabled()) {
-    setSyncStatus("Local only");
-  } else if (!who) {
-    setSyncStatus("Set your name to sync");
-  } else {
-    syncPullAndReconcile();
-  }
   refreshRemotePeople();
+
+  if (who) {
+    whoDisplay.textContent = who;
+    hideGate();
+    bootApp();
+  } else {
+    showGate(false);
+  }
 })();

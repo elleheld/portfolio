@@ -23,6 +23,29 @@ window.TTSync = (function () {
     }
   }
 
+  // Like req(), but preserves the HTTP status instead of collapsing every
+  // non-2xx to null — auth flows need to tell "wrong password" (200,
+  // ok:false) apart from "name already taken" (409) apart from "network
+  // is down" (null).
+  async function reqStatus(path, options) {
+    if (!enabled()) return null;
+    try {
+      const resp = await fetch(window.TT_CONFIG.apiBase + path, {
+        ...options,
+        headers: headers(),
+      });
+      let body = null;
+      try {
+        body = await resp.json();
+      } catch {
+        body = null;
+      }
+      return { status: resp.status, ok: resp.ok, body };
+    } catch {
+      return null;
+    }
+  }
+
   return {
     enabled,
     getPeople: () => req("/api/people", { method: "GET" }),
@@ -32,5 +55,10 @@ window.TTSync = (function () {
     getActive: () => req("/api/active", { method: "GET" }),
     setActive: (who, payload) => req(`/api/active/${encodeURIComponent(who)}`, { method: "POST", body: JSON.stringify(payload) }),
     clearActive: (who) => req(`/api/active/${encodeURIComponent(who)}`, { method: "DELETE" }),
+    getAuth: (who) => req(`/api/auth/${encodeURIComponent(who)}`, { method: "GET" }),
+    registerAuth: (who, salt, hash) =>
+      reqStatus(`/api/auth/${encodeURIComponent(who)}`, { method: "POST", body: JSON.stringify({ action: "register", salt, hash }) }),
+    verifyAuth: (who, hash) =>
+      reqStatus(`/api/auth/${encodeURIComponent(who)}`, { method: "POST", body: JSON.stringify({ action: "verify", hash }) }),
   };
 })();

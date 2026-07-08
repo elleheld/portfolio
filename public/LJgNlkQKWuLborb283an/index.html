@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Time Tracker</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="stylesheet" href="style.css?v=4" />
+<link rel="stylesheet" href="style.css?v=5" />
 </head>
 <body>
   <div class="app">
@@ -18,9 +18,8 @@
         <a class="btn btn-ghost btn-small" href="dashboard.html">Live Dashboard →</a>
       </div>
       <div class="who-row">
-        <label for="who-input">Tracking as</label>
-        <input type="text" id="who-input" list="people-list" placeholder="Your name" autocomplete="off" />
-        <datalist id="people-list"></datalist>
+        <span>Tracking as <strong id="who-display">—</strong></span>
+        <button id="switch-who-btn" class="btn btn-ghost btn-small">Switch</button>
         <span id="sync-status" class="sync-status"></span>
       </div>
     </header>
@@ -65,8 +64,42 @@
 
   <div id="viz-tooltip" class="viz-tooltip" hidden></div>
 
+  <div id="identity-gate" class="identity-gate">
+    <div class="identity-gate-card">
+      <h2>Who's tracking?</h2>
+      <p>Pick your name so your time syncs across devices and shows up on the live dashboard.</p>
+
+      <form id="gate-step-name" class="gate-step">
+        <div class="modal-field">
+          <label for="gate-name-input">Name</label>
+          <input type="text" id="gate-name-input" list="people-list" placeholder="Your name" autocomplete="off" />
+          <datalist id="people-list"></datalist>
+        </div>
+        <p id="gate-name-error" class="gate-error" hidden></p>
+        <button type="submit" class="btn btn-primary">Continue</button>
+      </form>
+
+      <form id="gate-step-password" class="gate-step" hidden>
+        <p id="gate-password-context" class="gate-context"></p>
+        <div class="modal-field">
+          <label for="gate-password-input">Password</label>
+          <input type="password" id="gate-password-input" autocomplete="off" />
+        </div>
+        <div class="modal-field" id="gate-confirm-field" hidden>
+          <label for="gate-password-confirm">Confirm password</label>
+          <input type="password" id="gate-password-confirm" autocomplete="off" />
+        </div>
+        <p id="gate-password-error" class="gate-error" hidden></p>
+        <div class="modal-actions" style="justify-content: space-between;">
+          <button type="button" id="gate-back-btn" class="btn btn-ghost">&larr; Back</button>
+          <button type="submit" id="gate-password-submit" class="btn btn-primary">Continue</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="config.js?v=1"></script>
-  <script src="sync.js?v=1"></script>
-  <script src="app.js?v=4"></script>
+  <script src="sync.js?v=2"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>
