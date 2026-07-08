@@ -4,6 +4,6 @@
 // text in this file, so it is not real access control. Don't put anything
 // sensitive behind it.
 window.TT_CONFIG = {
-  apiBase: "", // e.g. "https://elles-timetracker.<subdomain>.workers.dev" — empty = sync disabled, local-only
+  apiBase: "https://elles-timetracker.elle-held-domain.workers.dev",
   sharedSecret: "vc1QzQ1begwg6kePGR93tAvGdHaZEySd",
 };
