@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Time Tracker</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>⏱ Time Tracker</h1>
+      <p class="subtitle">Track time by customer &amp; ticket, then export your daily totals.</p>
+    </header>
+
+    <section class="card timer-card">
+      <h2>New Timer</h2>
+      <form id="timer-form" class="timer-form">
+        <div class="field">
+          <label for="customer">Customer / Company</label>
+          <input type="text" id="customer" list="customer-list" placeholder="Acme Corp" required autocomplete="off" />
+          <datalist id="customer-list"></datalist>
+        </div>
+        <div class="field">
+          <label for="ticket">Ticket Number</label>
+          <input type="text" id="ticket" placeholder="TCK-1234" required autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="note">Note (optional)</label>
+          <input type="text" id="note" placeholder="What are you working on?" autocomplete="off" />
+        </div>
+        <button type="submit" id="start-btn" class="btn btn-primary">Start Timer</button>
+      </form>
+    </section>
+
+    <section class="card active-card" id="active-card" hidden>
+      <h2>Running</h2>
+      <div class="active-timer">
+        <div class="active-info">
+          <div class="active-customer" id="active-customer"></div>
+          <div class="active-ticket" id="active-ticket"></div>
+          <div class="active-note" id="active-note"></div>
+        </div>
+        <div class="active-elapsed" id="active-elapsed">00:00:00</div>
+        <button id="stop-btn" class="btn btn-danger">Stop</button>
+      </div>
+    </section>
+
+    <section class="card day-card">
+      <div class="day-header">
+        <h2>Day</h2>
+        <div class="day-controls">
+          <button id="prev-day" class="btn btn-ghost" title="Previous day">&larr;</button>
+          <input type="date" id="day-picker" />
+          <button id="next-day" class="btn btn-ghost" title="Next day">&rarr;</button>
+          <button id="today-btn" class="btn btn-ghost">Today</button>
+        </div>
+      </div>
+
+      <div class="entries-wrap">
+        <table class="entries-table" id="entries-table">
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Ticket</th>
+              <th>Note</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Duration</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="entries-body"></tbody>
+        </table>
+        <p class="empty-state" id="empty-state">No entries for this day yet.</p>
+      </div>
+    </section>
+
+    <section class="card summary-card">
+      <div class="summary-header">
+        <h2>Summary by Customer</h2>
+        <button id="export-btn" class="btn btn-primary">Export CSV</button>
+      </div>
+      <div id="summary-body" class="summary-body"></div>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
