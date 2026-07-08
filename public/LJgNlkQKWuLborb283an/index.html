@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Time Tracker</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="stylesheet" href="style.css?v=2" />
+<link rel="stylesheet" href="style.css?v=3" />
 </head>
 <body>
   <div class="app">
@@ -14,11 +14,12 @@
       <p class="subtitle">Company, ticket, and what you did — timed or backfilled.</p>
     </header>
 
-    <div id="running-banner" class="running-banner" hidden>
-      <span class="running-bolt">&#9889;</span>
-      <span id="running-label" class="running-label"></span>
-      <span id="running-elapsed" class="running-elapsed mono">00:00:00</span>
-      <button id="running-stop" class="btn btn-danger btn-small">Stop</button>
+    <div id="bolt-section" class="bolt-section">
+      <span id="bolt-icon" class="bolt-icon">&#9889;</span>
+      <span id="bolt-label" class="bolt-label">No timer running</span>
+      <span id="bolt-elapsed" class="bolt-elapsed mono" hidden>00:00:00</span>
+      <button id="bolt-resume" class="btn btn-ghost btn-small" hidden></button>
+      <button id="bolt-stop" class="btn btn-danger btn-small" hidden>Stop</button>
     </div>
 
     <div class="week-nav">
@@ -33,6 +34,26 @@
 
   <datalist id="company-list"></datalist>
 
-  <script src="app.js?v=2"></script>
+  <div id="time-modal-backdrop" class="modal-backdrop" hidden>
+    <div class="modal">
+      <h3>Set start &amp; end time</h3>
+      <div class="modal-field">
+        <label for="time-modal-start">Start</label>
+        <input type="time" id="time-modal-start" step="60" />
+      </div>
+      <div class="modal-field">
+        <label for="time-modal-end">End</label>
+        <input type="time" id="time-modal-end" step="60" />
+      </div>
+      <div class="modal-actions">
+        <button id="time-modal-cancel" class="btn btn-ghost">Cancel</button>
+        <button id="time-modal-save" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="viz-tooltip" class="viz-tooltip" hidden></div>
+
+  <script src="app.js?v=3"></script>
 </body>
 </html>

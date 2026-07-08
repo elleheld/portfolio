@@ -15,9 +15,15 @@ window.addEventListener("error", (e) => {
   const SESSIONS_KEY = "timeTracker.sessions.v2";
   const ACTIVE_KEY = "timeTracker.active.v2";
   const COMPANIES_KEY = "timeTracker.companies.v2";
+  const LAST_STOPPED_KEY = "timeTracker.lastStopped.v2";
   const LEGACY_ENTRIES_KEY = "timeTracker.entries";
 
-  const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+  const GAP_THRESHOLD_MS = 60 * 1000;
+
+  // dataviz categorical palette (dark-mode steps), red reserved for the
+  // "missing time" status so it never doubles as a company color.
+  const CATEGORICAL_COLORS = ["#3987e5", "#199e70", "#c98500", "#008300", "#9085e9", "#d55181", "#d95926"];
+  const CRITICAL_COLOR = "#d03b3b";
 
   const daysEl = document.getElementById("days");
   const weekLabelEl = document.getElementById("week-label");
@@ -26,15 +32,26 @@ window.addEventListener("error", (e) => {
   const thisWeekBtn = document.getElementById("this-week");
   const companyListEl = document.getElementById("company-list");
 
-  const runningBanner = document.getElementById("running-banner");
-  const runningLabel = document.getElementById("running-label");
-  const runningElapsed = document.getElementById("running-elapsed");
-  const runningStopBtn = document.getElementById("running-stop");
+  const boltSection = document.getElementById("bolt-section");
+  const boltIcon = document.getElementById("bolt-icon");
+  const boltLabel = document.getElementById("bolt-label");
+  const boltElapsed = document.getElementById("bolt-elapsed");
+  const boltStopBtn = document.getElementById("bolt-stop");
+  const boltResumeBtn = document.getElementById("bolt-resume");
+
+  const timeModalBackdrop = document.getElementById("time-modal-backdrop");
+  const timeModalStart = document.getElementById("time-modal-start");
+  const timeModalEnd = document.getElementById("time-modal-end");
+  const timeModalCancel = document.getElementById("time-modal-cancel");
+  const timeModalSave = document.getElementById("time-modal-save");
+
+  const tooltipEl = document.getElementById("viz-tooltip");
 
   let entries = loadJson(ENTRIES_KEY, null);
   let sessions = loadJson(SESSIONS_KEY, []);
   let companies = loadJson(COMPANIES_KEY, []);
   let activeTimer = loadJson(ACTIVE_KEY, null);
+  let lastStopped = loadJson(LAST_STOPPED_KEY, null);
 
   if (entries === null) {
     entries = migrateLegacyEntries();
@@ -49,6 +66,8 @@ window.addEventListener("error", (e) => {
   let weekStart = mondayOf(todayStr());
   let tickHandle = null;
   const draftByDate = {};
+  const companyColorMap = new Map();
+  let modalContext = null; // { type: 'entry', id } | { type: 'draft', date }
 
   // ---------- storage helpers ----------
 
@@ -78,6 +97,14 @@ window.addEventListener("error", (e) => {
       localStorage.setItem(ACTIVE_KEY, JSON.stringify(activeTimer));
     } else {
       localStorage.removeItem(ACTIVE_KEY);
+    }
+  }
+
+  function saveLastStopped() {
+    if (lastStopped) {
+      localStorage.setItem(LAST_STOPPED_KEY, JSON.stringify(lastStopped));
+    } else {
+      localStorage.removeItem(LAST_STOPPED_KEY);
     }
   }
 
@@ -150,6 +177,10 @@ window.addEventListener("error", (e) => {
   }
 
   function formatClock(isoString) {
+    return new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function formatClockSec(isoString) {
     return new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   }
 
@@ -161,6 +192,18 @@ window.addEventListener("error", (e) => {
     const div = document.createElement("div");
     div.textContent = str == null ? "" : str;
     return div.innerHTML;
+  }
+
+  function timeInputToIso(dateStr, hhmm) {
+    const [h, m] = hhmm.split(":").map(Number);
+    const d = parseDateStr(dateStr);
+    d.setHours(h, m, 0, 0);
+    return d.toISOString();
+  }
+
+  function isoToTimeInput(isoString) {
+    const d = new Date(isoString);
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   }
 
   // ---------- carry-over materialization ----------
@@ -187,7 +230,7 @@ window.addEventListener("error", (e) => {
     if (changed) saveEntries();
   }
 
-  // ---------- company autocomplete ----------
+  // ---------- company autocomplete + color ----------
 
   function rememberCompany(company) {
     const trimmed = company.trim();
@@ -202,6 +245,14 @@ window.addEventListener("error", (e) => {
 
   function renderCompanyList() {
     companyListEl.innerHTML = companies.map((c) => `<option value="${escapeHtml(c)}"></option>`).join("");
+  }
+
+  function companyColor(company) {
+    const key = (company || "").trim().toLowerCase();
+    if (!companyColorMap.has(key)) {
+      companyColorMap.set(key, CATEGORICAL_COLORS[companyColorMap.size % CATEGORICAL_COLORS.length]);
+    }
+    return companyColorMap.get(key);
   }
 
   // ---------- entry / session mutation ----------
@@ -227,9 +278,9 @@ window.addEventListener("error", (e) => {
     return entry;
   }
 
-  function startTimerOn(entryId) {
+  function startTimerOn(entryId, startIso) {
     if (activeTimer) stopActiveTimer();
-    activeTimer = { entryId, start: new Date().toISOString() };
+    activeTimer = { entryId, start: startIso || new Date().toISOString() };
     saveActive();
     startTicking();
     renderAll();
@@ -241,7 +292,7 @@ window.addEventListener("error", (e) => {
     const start = activeTimer.start;
     const end = new Date().toISOString();
     if (entry) {
-      const ms = new Date(end) - new Date(start);
+      const ms = Math.max(0, new Date(end) - new Date(start));
       entry.totalMs += ms;
       sessions.push({
         id: uid(),
@@ -256,6 +307,8 @@ window.addEventListener("error", (e) => {
       });
       saveEntries();
       saveSessions();
+      lastStopped = { entryId: entry.id, end };
+      saveLastStopped();
     }
     activeTimer = null;
     saveActive();
@@ -279,6 +332,31 @@ window.addEventListener("error", (e) => {
       start: start.toISOString(),
       end: end.toISOString(),
       type: "manual",
+    });
+    saveEntries();
+    saveSessions();
+    renderAll();
+  }
+
+  function addRangeSession(entryId, startIso, endIso) {
+    const entry = getEntry(entryId);
+    if (!entry) return;
+    const ms = new Date(endIso) - new Date(startIso);
+    if (!(ms > 0)) {
+      alert("End time must be after start time.");
+      return;
+    }
+    entry.totalMs += ms;
+    sessions.push({
+      id: uid(),
+      entryId: entry.id,
+      date: entry.date,
+      company: entry.company,
+      ticket: entry.ticket,
+      description: entry.description,
+      start: startIso,
+      end: endIso,
+      type: "range",
     });
     saveEntries();
     saveSessions();
@@ -317,39 +395,130 @@ window.addEventListener("error", (e) => {
     return entry;
   }
 
+  // ---------- custom time modal ----------
+
+  function openTimeModal(context) {
+    modalContext = context;
+    const now = new Date();
+    const defaultEnd = isoToTimeInput(now.toISOString());
+    let defaultStart;
+    if (lastStopped) {
+      const lastEntry = getEntry(lastStopped.entryId);
+      if (lastEntry && lastEntry.date === contextDate(context)) {
+        defaultStart = isoToTimeInput(lastStopped.end);
+      }
+    }
+    if (!defaultStart) {
+      defaultStart = isoToTimeInput(new Date(now.getTime() - 30 * 60 * 1000).toISOString());
+    }
+    timeModalStart.value = defaultStart;
+    timeModalEnd.value = defaultEnd;
+    timeModalBackdrop.hidden = false;
+    timeModalStart.focus();
+  }
+
+  function contextDate(context) {
+    if (context.type === "entry") {
+      const entry = getEntry(context.id);
+      return entry ? entry.date : todayStr();
+    }
+    return context.date;
+  }
+
+  function closeTimeModal() {
+    timeModalBackdrop.hidden = true;
+    modalContext = null;
+  }
+
+  timeModalCancel.addEventListener("click", closeTimeModal);
+  timeModalBackdrop.addEventListener("click", (e) => {
+    if (e.target === timeModalBackdrop) closeTimeModal();
+  });
+
+  timeModalSave.addEventListener("click", () => {
+    if (!modalContext) return;
+    const date = contextDate(modalContext);
+    if (!timeModalStart.value || !timeModalEnd.value) return;
+    const startIso = timeInputToIso(date, timeModalStart.value);
+    const endIso = timeInputToIso(date, timeModalEnd.value);
+
+    let entryId;
+    if (modalContext.type === "entry") {
+      entryId = modalContext.id;
+    } else {
+      entryId = commitDraft(modalContext.date).id;
+    }
+    closeTimeModal();
+    addRangeSession(entryId, startIso, endIso);
+  });
+
   // ---------- rendering ----------
 
   function renderAll() {
-    renderRunningBanner();
+    renderBoltSection();
     renderWeek();
   }
 
-  function renderRunningBanner() {
-    if (!activeTimer) {
-      runningBanner.hidden = true;
-      return;
+  function renderBoltSection() {
+    if (activeTimer) {
+      const entry = getEntry(activeTimer.entryId);
+      if (!entry) {
+        activeTimer = null;
+        saveActive();
+      } else {
+        boltSection.classList.add("bolt-active");
+        boltIcon.textContent = "⚡";
+        boltLabel.textContent = `${entry.company} · ${entry.ticket}${entry.description ? " — " + entry.description : ""}`;
+        boltStopBtn.hidden = false;
+        boltResumeBtn.hidden = true;
+        boltElapsed.hidden = false;
+        updateBoltElapsed();
+        return;
+      }
     }
-    const entry = getEntry(activeTimer.entryId);
-    if (!entry) {
-      runningBanner.hidden = true;
-      return;
+
+    boltSection.classList.remove("bolt-active");
+    boltIcon.textContent = "⚡";
+    boltElapsed.hidden = true;
+    boltStopBtn.hidden = true;
+
+    const today = todayStr();
+    if (lastStopped) {
+      const lastEntry = getEntry(lastStopped.entryId);
+      if (lastEntry && lastEntry.date === today) {
+        boltLabel.textContent = "No timer running";
+        boltResumeBtn.hidden = false;
+        boltResumeBtn.textContent = `Resume ${lastEntry.company} · ${lastEntry.ticket} (from ${formatClock(lastStopped.end)})`;
+        return;
+      }
     }
-    runningBanner.hidden = false;
-    runningLabel.textContent = `${entry.company} · ${entry.ticket}${entry.description ? " — " + entry.description : ""}`;
-    updateRunningElapsed();
+
+    boltLabel.textContent = "No timer running";
+    boltResumeBtn.hidden = true;
   }
 
-  function updateRunningElapsed() {
+  function updateBoltElapsed() {
     if (!activeTimer) return;
     const elapsed = Date.now() - new Date(activeTimer.start).getTime();
-    runningElapsed.textContent = formatDuration(elapsed);
+    boltElapsed.textContent = formatDuration(elapsed);
   }
+
+  boltStopBtn.addEventListener("click", () => {
+    stopActiveTimer();
+    renderAll();
+  });
+
+  boltResumeBtn.addEventListener("click", () => {
+    if (!lastStopped) return;
+    startTimerOn(lastStopped.entryId, lastStopped.end);
+  });
 
   function startTicking() {
     stopTicking();
     tickHandle = setInterval(() => {
-      updateRunningElapsed();
+      updateBoltElapsed();
       updateRunningRowCell();
+      updateLiveTimeline();
     }, 1000);
   }
 
@@ -368,6 +537,15 @@ window.addEventListener("error", (e) => {
     if (!entry) return;
     const elapsed = Date.now() - new Date(activeTimer.start).getTime();
     cell.textContent = formatDuration(entry.totalMs + elapsed);
+  }
+
+  function updateLiveTimeline() {
+    if (!activeTimer) return;
+    const entry = getEntry(activeTimer.entryId);
+    if (!entry) return;
+    const holder = document.querySelector(`[data-timeline-for="${entry.date}"]`);
+    if (!holder) return;
+    holder.replaceChildren(buildTimeline(entry.date));
   }
 
   function weekdayDates() {
@@ -453,6 +631,12 @@ window.addEventListener("error", (e) => {
 
     section.appendChild(table);
 
+    const timelineWrap = document.createElement("div");
+    timelineWrap.className = "timeline-wrap";
+    timelineWrap.setAttribute("data-timeline-for", date);
+    timelineWrap.appendChild(buildTimeline(date));
+    section.appendChild(timelineWrap);
+
     header.querySelector(`[data-export-totals]`).addEventListener("click", () => exportTotalsCsv(date, dayEntries));
     header.querySelector(`[data-export-timeline]`).addEventListener("click", () => exportTimelineCsv(date));
 
@@ -476,6 +660,7 @@ window.addEventListener("error", (e) => {
           <button class="btn btn-small ${isRunning ? "btn-danger" : "btn-primary"}" data-timer-toggle="${entry.id}">${isRunning ? "Stop" : "Start"}</button>
           <button class="btn btn-ghost btn-small" data-add5="${entry.id}">+5m</button>
           <button class="btn btn-ghost btn-small" data-addcustom="${entry.id}">+Custom</button>
+          <button class="btn btn-ghost btn-small" data-times="${entry.id}" title="Set a custom start and end time">Times</button>
         </div>
       </td>
       <td class="col-time mono" data-time-for="${entry.id}">${formatDuration(entry.totalMs)}</td>
@@ -492,7 +677,7 @@ window.addEventListener("error", (e) => {
         entry[e.target.dataset.field] = e.target.value.trim();
         if (e.target.dataset.field === "company") rememberCompany(entry.company);
         saveEntries();
-        if (isRunning) renderRunningBanner();
+        if (isRunning) renderBoltSection();
       });
     });
 
@@ -513,6 +698,10 @@ window.addEventListener("error", (e) => {
       const minutes = parseFloat(input);
       if (!Number.isFinite(minutes) || minutes <= 0) return;
       addManualMinutes(entry.id, minutes);
+    });
+
+    tr.querySelector(`[data-times]`).addEventListener("click", () => {
+      openTimeModal({ type: "entry", id: entry.id });
     });
 
     tr.querySelector(`[data-delete]`).addEventListener("click", () => {
@@ -537,6 +726,7 @@ window.addEventListener("error", (e) => {
           <button class="btn btn-primary btn-small" data-draft-start>Start</button>
           <button class="btn btn-ghost btn-small" data-draft-add5>+5m</button>
           <button class="btn btn-ghost btn-small" data-draft-addcustom>+Custom</button>
+          <button class="btn btn-ghost btn-small" data-draft-times title="Set a custom start and end time">Times</button>
         </div>
       </td>
       <td class="col-time mono">00:00:00</td>
@@ -571,7 +761,137 @@ window.addEventListener("error", (e) => {
       addManualMinutes(entry.id, minutes);
     });
 
+    tr.querySelector(`[data-draft-times]`).addEventListener("click", () => {
+      if (!draftReady(date)) return;
+      openTimeModal({ type: "draft", date });
+    });
+
     return tr;
+  }
+
+  // ---------- timeline (dataviz) ----------
+
+  function buildTimeline(date) {
+    const daySessions = sessions
+      .filter((s) => s.date === date)
+      .slice()
+      .sort((a, b) => new Date(a.start) - new Date(b.start));
+
+    const segments = daySessions.map((s) => ({
+      startMs: new Date(s.start).getTime(),
+      endMs: new Date(s.end).getTime(),
+      company: s.company,
+      ticket: s.ticket,
+      description: s.description,
+      kind: "work",
+    }));
+
+    if (activeTimer) {
+      const entry = getEntry(activeTimer.entryId);
+      if (entry && entry.date === date) {
+        segments.push({
+          startMs: new Date(activeTimer.start).getTime(),
+          endMs: Date.now(),
+          company: entry.company,
+          ticket: entry.ticket,
+          description: entry.description,
+          kind: "live",
+        });
+      }
+    }
+
+    segments.sort((a, b) => a.startMs - b.startMs);
+
+    const container = document.createElement("div");
+
+    if (segments.length === 0) {
+      container.innerHTML = `<div class="timeline-empty">No timed sessions yet today.</div>`;
+      return container;
+    }
+
+    // fold in red gap segments between consecutive tracked blocks
+    const withGaps = [];
+    for (let i = 0; i < segments.length; i++) {
+      withGaps.push(segments[i]);
+      const next = segments[i + 1];
+      if (next && next.startMs - segments[i].endMs >= GAP_THRESHOLD_MS) {
+        withGaps.push({
+          startMs: segments[i].endMs,
+          endMs: next.startMs,
+          kind: "gap",
+        });
+      }
+    }
+
+    const windowStart = withGaps[0].startMs;
+    const windowEnd = withGaps[withGaps.length - 1].endMs;
+    const windowMs = Math.max(1, windowEnd - windowStart);
+
+    const heading = document.createElement("div");
+    heading.className = "timeline-heading";
+    heading.textContent = "Timeline";
+    container.appendChild(heading);
+
+    const bar = document.createElement("div");
+    bar.className = "timeline-bar";
+
+    withGaps.forEach((seg, i) => {
+      const el = document.createElement("div");
+      const widthPct = ((seg.endMs - seg.startMs) / windowMs) * 100;
+      el.className = "timeline-seg" + (seg.kind === "gap" ? " timeline-seg-gap" : "") + (seg.kind === "live" ? " timeline-seg-live" : "");
+      el.style.flexBasis = `${widthPct}%`;
+      el.style.background = seg.kind === "gap" ? CRITICAL_COLOR : companyColor(seg.company);
+      el.tabIndex = 0;
+
+      const label =
+        seg.kind === "gap"
+          ? `Missing time — ${formatClock(new Date(seg.startMs).toISOString())}–${formatClock(new Date(seg.endMs).toISOString())} (${formatDuration(seg.endMs - seg.startMs)})`
+          : `${seg.company} · ${seg.ticket}${seg.description ? " — " + seg.description : ""} — ${formatClock(new Date(seg.startMs).toISOString())}–${formatClock(new Date(seg.endMs).toISOString())} (${formatDuration(seg.endMs - seg.startMs)})`;
+
+      el.addEventListener("mouseenter", (e) => showTooltip(label, e.currentTarget));
+      el.addEventListener("focus", (e) => showTooltip(label, e.currentTarget));
+      el.addEventListener("mouseleave", hideTooltip);
+      el.addEventListener("blur", hideTooltip);
+
+      bar.appendChild(el);
+    });
+
+    container.appendChild(bar);
+
+    const axis = document.createElement("div");
+    axis.className = "timeline-axis";
+    axis.innerHTML = `<span>${formatClock(new Date(windowStart).toISOString())}</span><span>${formatClock(new Date(windowEnd).toISOString())}</span>`;
+    container.appendChild(axis);
+
+    const companiesInDay = [...new Set(segments.filter((s) => s.kind !== "gap").map((s) => s.company))];
+    const hasGap = withGaps.some((s) => s.kind === "gap");
+    if (companiesInDay.length > 0) {
+      const legend = document.createElement("div");
+      legend.className = "timeline-legend";
+      legend.innerHTML =
+        companiesInDay
+          .map((c) => `<span class="legend-item"><span class="legend-swatch" style="background:${companyColor(c)}"></span>${escapeHtml(c)}</span>`)
+          .join("") +
+        (hasGap ? `<span class="legend-item"><span class="legend-swatch" style="background:${CRITICAL_COLOR}"></span>Missing time</span>` : "");
+      container.appendChild(legend);
+    }
+
+    return container;
+  }
+
+  function showTooltip(text, target) {
+    tooltipEl.textContent = text;
+    tooltipEl.hidden = false;
+    const rect = target.getBoundingClientRect();
+    const tipRect = tooltipEl.getBoundingClientRect();
+    let left = rect.left + rect.width / 2 - tipRect.width / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - tipRect.width - 8));
+    tooltipEl.style.left = `${left + window.scrollX}px`;
+    tooltipEl.style.top = `${rect.top + window.scrollY - tipRect.height - 8}px`;
+  }
+
+  function hideTooltip() {
+    tooltipEl.hidden = true;
   }
 
   // ---------- CSV export ----------
@@ -628,6 +948,12 @@ window.addEventListener("error", (e) => {
     downloadCsv(csv, `time-totals-${date}.csv`);
   }
 
+  function typeLabel(type) {
+    if (type === "manual") return "manual add";
+    if (type === "range") return "custom range";
+    return "timer";
+  }
+
   function exportTimelineCsv(date) {
     const daySessions = sessions
       .filter((s) => s.date === date)
@@ -635,20 +961,20 @@ window.addEventListener("error", (e) => {
       .sort((a, b) => new Date(a.start) - new Date(b.start));
 
     if (daySessions.length === 0) {
-      alert("No timed sessions logged for this day yet (only entries with a Start/Stop or +time click show up here).");
+      alert("No timed sessions logged for this day yet (only entries with a Start/Stop, +time, or custom-times click show up here).");
       return;
     }
 
     const rows = [["Start", "End", "Duration (H:MM:SS)", "Company", "Ticket", "Description", "Type"]];
     for (const s of daySessions) {
       rows.push([
-        formatClock(s.start),
-        formatClock(s.end),
+        formatClockSec(s.start),
+        formatClockSec(s.end),
         formatDuration(new Date(s.end) - new Date(s.start)),
         s.company,
         s.ticket,
         s.description,
-        s.type === "manual" ? "manual add" : "timer",
+        typeLabel(s.type),
       ]);
     }
 
@@ -673,11 +999,6 @@ window.addEventListener("error", (e) => {
   thisWeekBtn.addEventListener("click", () => {
     weekStart = mondayOf(todayStr());
     renderWeek();
-  });
-
-  runningStopBtn.addEventListener("click", () => {
-    stopActiveTimer();
-    renderAll();
   });
 
   // ---------- init ----------
