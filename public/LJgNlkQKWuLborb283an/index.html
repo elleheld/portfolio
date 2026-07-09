@@ -6,7 +6,7 @@
 <title>Time Tracker</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-<link rel="stylesheet" href="style.css?v=7" />
+<link rel="stylesheet" href="style.css?v=8" />
 </head>
 <body>
   <div class="app">
@@ -55,7 +55,7 @@
 
   <div id="time-modal-backdrop" class="modal-backdrop" hidden>
     <div class="modal">
-      <h3>Set start &amp; end time</h3>
+      <h3 id="time-modal-title">Set start &amp; end time</h3>
       <div class="modal-field">
         <label for="time-modal-start">Start</label>
         <input type="time" id="time-modal-start" step="60" />
@@ -64,9 +64,12 @@
         <label for="time-modal-end">End</label>
         <input type="time" id="time-modal-end" step="60" />
       </div>
-      <div class="modal-actions">
-        <button id="time-modal-cancel" class="btn btn-ghost">Cancel</button>
-        <button id="time-modal-save" class="btn btn-primary">Save</button>
+      <div class="modal-actions" style="justify-content: space-between;">
+        <button id="time-modal-reset" class="btn btn-ghost" hidden>Reset to default</button>
+        <div style="display: flex; gap: 8px;">
+          <button id="time-modal-cancel" class="btn btn-ghost">Cancel</button>
+          <button id="time-modal-save" class="btn btn-primary">Save</button>
+        </div>
       </div>
     </div>
   </div>
@@ -178,6 +181,6 @@
 
   <script src="config.js?v=1"></script>
   <script src="sync.js?v=3"></script>
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

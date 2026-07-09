@@ -51,6 +51,8 @@ window.addEventListener("error", (e) => {
   const timeModalEnd = document.getElementById("time-modal-end");
   const timeModalCancel = document.getElementById("time-modal-cancel");
   const timeModalSave = document.getElementById("time-modal-save");
+  const timeModalTitle = document.getElementById("time-modal-title");
+  const timeModalReset = document.getElementById("time-modal-reset");
 
   const tooltipEl = document.getElementById("viz-tooltip");
   const peopleListEl = document.getElementById("people-list");
@@ -103,6 +105,7 @@ window.addEventListener("error", (e) => {
   const draftByDate = {};
   const companyColorMap = new Map();
   const expandedEntries = new Set();
+  const collapsedDays = new Set();
   let modalContext = null; // { type: 'entry', id } | { type: 'draft', date } | { type: 'session', id }
 
   // ---------- storage helpers ----------
@@ -784,6 +787,16 @@ window.addEventListener("error", (e) => {
     return entries.find((e) => e.date === date && e.isWrap);
   }
 
+  // per-day override of profile working hours, if one's been set for
+  // that date, else the profile default.
+  function getWorkingHours(date) {
+    const override = profile.dayHours && profile.dayHours[date];
+    return {
+      start: override ? override.start : profile.workingHoursStart,
+      end: override ? override.end : profile.workingHoursEnd,
+    };
+  }
+
   // finds every stretch of the day's working-hours window (extended to
   // cover any actual activity outside it) not covered by any session —
   // leading and trailing gaps included, unlike the timeline's "Missing"
@@ -797,8 +810,9 @@ window.addEventListener("error", (e) => {
       }
     }
 
-    const workStartMs = new Date(timeInputToIso(date, profile.workingHoursStart)).getTime();
-    const workEndMs = new Date(timeInputToIso(date, profile.workingHoursEnd)).getTime();
+    const dayHours = getWorkingHours(date);
+    const workStartMs = new Date(timeInputToIso(date, dayHours.start)).getTime();
+    const workEndMs = new Date(timeInputToIso(date, dayHours.end)).getTime();
     const windowStart = Math.min(workStartMs, ...daySessions.map((s) => s[0]));
     let windowEnd = Math.max(workEndMs, ...daySessions.map((s) => s[1]));
     if (date === todayStr()) windowEnd = Math.min(windowEnd, Date.now());
@@ -1095,8 +1109,10 @@ window.addEventListener("error", (e) => {
 
   function openTimeModal(context) {
     modalContext = context;
+    timeModalReset.hidden = true;
 
     if (context.type === "session") {
+      timeModalTitle.textContent = "Set start & end time";
       const session = sessions.find((s) => s.id === context.id);
       if (!session) return;
       timeModalStart.value = isoToTimeInput(session.start);
@@ -1106,6 +1122,18 @@ window.addEventListener("error", (e) => {
       return;
     }
 
+    if (context.type === "dayHours") {
+      timeModalTitle.textContent = `Working hours for ${formatDayLabel(context.date)}`;
+      const hours = getWorkingHours(context.date);
+      timeModalStart.value = hours.start;
+      timeModalEnd.value = hours.end;
+      timeModalReset.hidden = !(profile.dayHours && profile.dayHours[context.date]);
+      timeModalBackdrop.hidden = false;
+      timeModalStart.focus();
+      return;
+    }
+
+    timeModalTitle.textContent = "Set start & end time";
     const now = new Date();
     const defaultEnd = isoToTimeInput(now.toISOString());
     let defaultStart;
@@ -1146,10 +1174,33 @@ window.addEventListener("error", (e) => {
     if (e.target === timeModalBackdrop) closeTimeModal();
   });
 
+  timeModalReset.addEventListener("click", () => {
+    if (modalContext && modalContext.type === "dayHours" && profile.dayHours) {
+      delete profile.dayHours[modalContext.date];
+      saveProfile();
+    }
+    closeTimeModal();
+    renderAll();
+  });
+
   timeModalSave.addEventListener("click", () => {
     if (!modalContext) return;
     const date = contextDate(modalContext);
     if (!timeModalStart.value || !timeModalEnd.value) return;
+
+    if (modalContext.type === "dayHours") {
+      if (timeModalEnd.value <= timeModalStart.value) {
+        alert("End time must be after start time.");
+        return;
+      }
+      if (!profile.dayHours) profile.dayHours = {};
+      profile.dayHours[date] = { start: timeModalStart.value, end: timeModalEnd.value };
+      saveProfile();
+      closeTimeModal();
+      renderAll();
+      return;
+    }
+
     const startIso = timeInputToIso(date, timeModalStart.value);
     const endIso = timeInputToIso(date, timeModalEnd.value);
 
@@ -1310,19 +1361,23 @@ window.addEventListener("error", (e) => {
     const dayTotal = dayEntries.reduce((sum, e) => sum + e.totalMs, 0);
     const wrapEntry = dayEntries.find((e) => e.isWrap);
     const ticketEntries = dayEntries.filter((e) => !e.isWrap);
+    const isCollapsed = collapsedDays.has(date);
 
-    const targetMs = Math.max(
-      0,
-      new Date(timeInputToIso(date, profile.workingHoursEnd)) - new Date(timeInputToIso(date, profile.workingHoursStart))
-    );
+    const dayHours = getWorkingHours(date);
+    const hasHoursOverride = !!(profile.dayHours && profile.dayHours[date]);
+    const targetMs = Math.max(0, new Date(timeInputToIso(date, dayHours.end)) - new Date(timeInputToIso(date, dayHours.start)));
     const targetClass = targetMs > 0 && dayTotal >= targetMs ? "target-met" : "target-under";
 
     const header = document.createElement("div");
     header.className = "day-header";
     header.innerHTML = `
-      <div class="day-title">${formatDayLabel(date)}${isToday ? '<span class="today-badge">Today</span>' : ""}</div>
+      <button class="day-title" data-toggle-day="${date}" title="${isCollapsed ? "Expand" : "Collapse"} ticket list">
+        <span class="day-chevron">${isCollapsed ? "▸" : "▾"}</span>
+        ${formatDayLabel(date)}${isToday ? '<span class="today-badge">Today</span>' : ""}
+      </button>
       <div class="day-header-right">
         <span class="day-total mono ${targetClass}">${formatDuration(dayTotal)}${targetMs > 0 ? ` <span class="target-sep">/</span> ${formatDuration(targetMs)}` : ""}</span>
+        <button class="btn-icon${hasHoursOverride ? " has-override" : ""}" data-edit-hours="${date}" title="${hasHoursOverride ? "Custom hours set for this day" : "Set custom hours for this day"}">&#128337;</button>
         <button class="btn btn-ghost btn-small" data-fill-gaps="${date}">Fill gaps as Wrap</button>
         <button class="btn btn-ghost btn-small" data-export-totals="${date}">Export Totals</button>
         <button class="btn btn-ghost btn-small" data-export-timeline="${date}">Export Timeline</button>
@@ -1334,36 +1389,38 @@ window.addEventListener("error", (e) => {
       section.appendChild(renderWrapSection(wrapEntry));
     }
 
-    const table = document.createElement("table");
-    table.className = "entries-table";
-    table.innerHTML = `
-      <thead>
-        <tr>
-          <th class="col-carry" title="Carry over to today's next open day">Carry</th>
-          <th>Company</th>
-          <th>Ticket</th>
-          <th>Description</th>
-          <th class="col-actions">Timer</th>
-          <th class="col-time">Time</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    `;
-    const tbody = table.querySelector("tbody");
+    if (!isCollapsed) {
+      const table = document.createElement("table");
+      table.className = "entries-table";
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th class="col-carry" title="Carry over to today's next open day">Carry</th>
+            <th>Company</th>
+            <th>Ticket</th>
+            <th>Description</th>
+            <th class="col-actions">Timer</th>
+            <th class="col-time">Time</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      `;
+      const tbody = table.querySelector("tbody");
 
-    for (const entry of ticketEntries) {
-      tbody.appendChild(renderEntryRow(entry));
-      if (expandedEntries.has(entry.id)) {
-        tbody.appendChild(renderSessionDetailRow(entry));
+      for (const entry of ticketEntries) {
+        tbody.appendChild(renderEntryRow(entry));
+        if (expandedEntries.has(entry.id)) {
+          tbody.appendChild(renderSessionDetailRow(entry));
+        }
       }
-    }
 
-    if (isToday) {
-      tbody.appendChild(renderDraftRow(date));
-    }
+      if (isToday) {
+        tbody.appendChild(renderDraftRow(date));
+      }
 
-    section.appendChild(table);
+      section.appendChild(table);
+    }
 
     const timelineWrap = document.createElement("div");
     timelineWrap.className = "timeline-wrap";
@@ -1374,6 +1431,12 @@ window.addEventListener("error", (e) => {
     header.querySelector(`[data-export-totals]`).addEventListener("click", () => exportTotalsCsv(date, dayEntries));
     header.querySelector(`[data-export-timeline]`).addEventListener("click", () => exportTimelineCsv(date));
     header.querySelector(`[data-fill-gaps]`).addEventListener("click", () => fillGapsAsWrap(date));
+    header.querySelector(`[data-edit-hours]`).addEventListener("click", () => openTimeModal({ type: "dayHours", date }));
+    header.querySelector(`[data-toggle-day]`).addEventListener("click", () => {
+      if (collapsedDays.has(date)) collapsedDays.delete(date);
+      else collapsedDays.add(date);
+      renderWeek();
+    });
 
     return section;
   }
@@ -1451,10 +1514,12 @@ window.addEventListener("error", (e) => {
     const tr = document.createElement("tr");
     const isRunning = activeTimer && activeTimer.entryId === entry.id;
     if (isRunning) tr.classList.add("row-running");
+    if (entry.carryOver) tr.classList.add("row-carry");
 
     tr.innerHTML = `
       <td class="col-carry">
         <input type="checkbox" data-carry="${entry.id}" ${entry.carryOver ? "checked" : ""} />
+        ${entry.carryOver ? '<span class="carry-badge" title="Will appear as a new row the next day you open the app">&#8594;</span>' : ""}
       </td>
       <td><input type="text" class="cell-input" list="company-list" data-field="company" data-id="${entry.id}" value="${escapeHtml(entry.company)}" /></td>
       <td><input type="text" class="cell-input" data-field="ticket" data-id="${entry.id}" value="${escapeHtml(entry.ticket)}" /></td>
@@ -1479,6 +1544,7 @@ window.addEventListener("error", (e) => {
     tr.querySelector(`[data-carry]`).addEventListener("change", (e) => {
       entry.carryOver = e.target.checked;
       saveEntries();
+      renderAll();
     });
 
     tr.querySelectorAll(`[data-field]`).forEach((input) => {
@@ -1713,8 +1779,9 @@ window.addEventListener("error", (e) => {
     // grows the bar instead of rescaling the whole axis to fit it. Actual
     // activity outside working hours still extends the window so nothing
     // gets clipped.
-    const workStartMs = new Date(timeInputToIso(date, profile.workingHoursStart)).getTime();
-    const workEndMs = new Date(timeInputToIso(date, profile.workingHoursEnd)).getTime();
+    const dayHours = getWorkingHours(date);
+    const workStartMs = new Date(timeInputToIso(date, dayHours.start)).getTime();
+    const workEndMs = new Date(timeInputToIso(date, dayHours.end)).getTime();
     const windowStart = Math.min(workStartMs, ...segments.map((s) => s.startMs));
     const windowEnd = Math.max(workEndMs, ...segments.map((s) => s.endMs));
     const windowMs = Math.max(1, windowEnd - windowStart);
